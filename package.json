@@ -1,0 +1,13 @@
+{
+  "name": "code-brothers",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Free, open-source visual automation + AI assistant platform",
+  "license": "MIT",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint"
+  },
+  "engines": { "node": ">=20" }
+}
