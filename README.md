@@ -20,5 +20,15 @@ cp .env.example .env   # set CB_MASTER_KEY and passwords
 docker compose -f docker/docker-compose.lite.yml up -d
 ```
 
+## Templates
+10 ready-to-import workflows live in [`templates/`](templates/README.md) — validate them with `node templates/validate.mjs`.
+
+## Docs
+- [Setup guide (English)](docs/setup-guide.md) · [Setup guide (Roman Urdu)](docs/setup-guide.ur.md)
+- [Connectors & free credentials](docs/connectors.md)
+- [Hardening guide](docs/hardening-guide.md)
+
+The optional Python AI media worker (Whisper/TTS/OCR/FFmpeg) lives in `services/ai-media-worker` and is part of the `docker-compose.full.yml` profile.
+
 ## License
 MIT — free for personal, agency and commercial use.
