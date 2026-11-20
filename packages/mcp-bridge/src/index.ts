@@ -1,1 +1,8 @@
-// @code-brothers/mcp-bridge — implementation lands in its build phase.
+/**
+ * @code-brothers/mcp-bridge — MCP (Model Context Protocol) client & server
+ * (spec §4D): JSON-RPC 2.0 over in-memory or stdio transports.
+ */
+export * from './transport.js';
+export * from './server.js';
+export * from './client.js';
+export * from './stdio.js';

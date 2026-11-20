@@ -1,6 +1,1 @@
-{
-  "name": "@code-brothers/connector-instagram",
-  "version": "0.1.0",
-  "private": true,
-  "license": "MIT"
-}
+{"dependencies":{"@code-brothers/node-sdk":"file:../../node-sdk"},"devDependencies":{"@types/node":"^22.10.0","typescript":"^5.7.0"},"exports":{".":{"default":"./dist/index.js","types":"./dist/index.d.ts"}},"license":"MIT","main":"dist/index.js","name":"@code-brothers/connector-instagram","private":true,"scripts":{"build":"tsc -p tsconfig.json","test":"npm run build && node --test \"dist/**/*.test.js\""},"type":"module","types":"dist/index.d.ts","version":"0.1.0"}
