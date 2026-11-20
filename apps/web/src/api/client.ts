@@ -1,4 +1,7 @@
 import type {
+  ApiConversation,
+  ApiInboxMessage,
+  ApiSkuMapping,
   AuditLogEntry,
   ClaimResult,
   CredentialMeta,
@@ -8,6 +11,8 @@ import type {
   PublicUser,
   SessionInfo,
   SetupStatus,
+  SkuMappingInput,
+  SyncSaleResult,
   WebhookMeta,
   Workflow,
   WorkflowEdge,
@@ -283,6 +288,79 @@ export class ApiClient {
 
   resumePlatform(): Promise<{ halted: boolean }> {
     return this.request('POST', '/api/security/resume', {});
+  }
+
+  // -- unified inbox (spec §7.1) --------------------------------------------------
+  async listInboxConversations(): Promise<ApiConversation[]> {
+    const res = await this.request<{ conversations: ApiConversation[] }>(
+      'GET',
+      '/api/inbox/conversations',
+    );
+    return res.conversations;
+  }
+
+  async listInboxMessages(
+    conversationId: string,
+  ): Promise<{ conversation: ApiConversation; messages: ApiInboxMessage[] }> {
+    return this.request(
+      'GET',
+      `/api/inbox/conversations/${encodeURIComponent(conversationId)}/messages`,
+    );
+  }
+
+  /** Human reply — the API auto-pauses the AI for the takeover window. */
+  async replyToConversation(
+    conversationId: string,
+    body: string,
+  ): Promise<{ message: ApiInboxMessage; conversation: ApiConversation }> {
+    return this.request(
+      'POST',
+      `/api/inbox/conversations/${encodeURIComponent(conversationId)}/reply`,
+      { body },
+    );
+  }
+
+  /** Human takeover toggle: paused=true pauses the AI, false hands it back. */
+  async setConversationTakeover(
+    conversationId: string,
+    paused: boolean,
+    windowMinutes?: number,
+  ): Promise<ApiConversation> {
+    const res = await this.request<{ conversation: ApiConversation }>(
+      'POST',
+      `/api/inbox/conversations/${encodeURIComponent(conversationId)}/takeover`,
+      { paused, ...(windowMinutes !== undefined ? { windowMinutes } : {}) },
+    );
+    return res.conversation;
+  }
+
+  // -- master SKU catalog (spec §7.2) ----------------------------------------------
+  async listSkuMappings(): Promise<ApiSkuMapping[]> {
+    const res = await this.request<{ mappings: ApiSkuMapping[] }>(
+      'GET',
+      '/api/catalog/sku-mappings',
+    );
+    return res.mappings;
+  }
+
+  createSkuMapping(input: SkuMappingInput): Promise<ApiSkuMapping> {
+    return this.request('POST', '/api/catalog/sku-mappings', input);
+  }
+
+  updateSkuMapping(id: string, input: Partial<SkuMappingInput>): Promise<ApiSkuMapping> {
+    return this.request('PUT', `/api/catalog/sku-mappings/${encodeURIComponent(id)}`, input);
+  }
+
+  deleteSkuMapping(id: string): Promise<void> {
+    return this.request('DELETE', `/api/catalog/sku-mappings/${encodeURIComponent(id)}`);
+  }
+
+  syncCatalogSale(input: {
+    channel: 'shopify' | 'daraz' | 'local';
+    channelSku: string;
+    qty: number;
+  }): Promise<SyncSaleResult> {
+    return this.request('POST', '/api/catalog/sync-sale', input);
   }
 }
 

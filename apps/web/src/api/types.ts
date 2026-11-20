@@ -171,3 +171,92 @@ export interface LoginResult {
   token: string;
   user: PublicUser;
 }
+
+// -- unified inbox (spec §7.1) ------------------------------------------------
+
+export interface ApiConversation {
+  id: string;
+  channel: 'whatsapp' | 'instagram';
+  /** Buyer identity on the channel (phone number / IG user id). */
+  externalId: string;
+  displayName?: string;
+  customerId?: string;
+  aiPaused: boolean;
+  pausedUntil?: string;
+  messageCount: number;
+  lastMessage?: {
+    body: string;
+    sender: 'customer' | 'ai' | 'human';
+    direction: 'in' | 'out';
+    createdAt: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApiInboxMessage {
+  id: string;
+  conversationId: string;
+  direction: 'in' | 'out';
+  sender: 'customer' | 'ai' | 'human';
+  body: string;
+  createdAt: string;
+}
+
+// -- master SKU catalog (spec §7.2) --------------------------------------------
+
+export type CatalogChannel = 'shopify' | 'daraz' | 'local';
+
+export interface ApiSkuMapping {
+  id: string;
+  masterSku: string;
+  shopifySku?: string;
+  shopifyProductId?: string;
+  darazSku?: string;
+  darazItemId?: string;
+  localSku?: string;
+  localProductId?: string;
+  /** Channel-specific price overrides. */
+  prices: Partial<Record<CatalogChannel, number>>;
+  /** Units currently listed per channel. */
+  stock: Record<CatalogChannel, number>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SkuMappingInput {
+  masterSku: string;
+  shopifySku?: string;
+  shopifyProductId?: string;
+  darazSku?: string;
+  darazItemId?: string;
+  localSku?: string;
+  localProductId?: string;
+  prices?: Partial<Record<CatalogChannel, number>>;
+  stock?: Partial<Record<CatalogChannel, number>>;
+}
+
+export interface SyncSaleResult {
+  masterSku: string;
+  channel: CatalogChannel;
+  channelSku: string;
+  qty: number;
+  source: {
+    channel: CatalogChannel;
+    channelSku: string;
+    deductQty: number;
+    stockBefore: number;
+    stockAfter: number;
+    clamped: boolean;
+  };
+  plan: Array<{
+    channel: CatalogChannel;
+    channelSku?: string;
+    masterSku: string;
+    deductQty: number;
+    stockBefore: number;
+    stockAfter: number;
+    clamped: boolean;
+  }>;
+  stock: Record<CatalogChannel, number>;
+}

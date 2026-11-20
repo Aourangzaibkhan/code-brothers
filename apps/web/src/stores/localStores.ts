@@ -1,12 +1,33 @@
 /**
- * Local store modules for dashboard areas that the Fastify API does not
- * expose yet (Unified Inbox, SKU Catalog, Content Calendar — spec §7).
+ * Store modules for the Unified Inbox, SKU Catalog and Content Calendar
+ * (spec §7).
  *
- * Each store exposes the SAME async interface the future REST endpoints will
- * use (list/get/create/update), so swapping the localStorage backing for
- * `api` calls later is a one-file change. Data is persisted per-browser in
- * localStorage and seeded with realistic demo records on first run.
+ * Inbox and Catalog are backed by the real Fastify API (apps/api modules
+ * `inbox.ts` / `catalog.ts`) through the typed client in `../api/client`.
+ * The API shapes differ slightly from the dashboard's view models, so the
+ * mapping lives here and the pages keep consuming the same interfaces:
+ *
+ *  - Conversation: the API exposes `externalId` + optional `displayName`
+ *    (mapped to customerHandle / customerName). It has no per-conversation
+ *    language or unread counter, so `language` is '' and `unread` is 0.
+ *  - Message: the API calls the author field `sender`; mapped to `author`.
+ *  - SkuMapping: the API stores stock and price PER CHANNEL
+ *    (`stock: {shopify, daraz, local}`, `prices: {...}`) and has no product
+ *    name or currency. The dashboard's single stock/price are written to
+ *    every channel and read back from the first channel that has a value;
+ *    `productName` is '' and `currency` defaults to 'PKR'.
+ *
+ * The Content Calendar has no API yet, so it stays localStorage-backed
+ * (seeded with demo records on first run).
  */
+import { api } from '../api/client';
+import type {
+  ApiConversation,
+  ApiInboxMessage,
+  ApiSkuMapping,
+  CatalogChannel,
+  SyncSaleResult,
+} from '../api/types';
 
 export interface Conversation {
   id: string;
@@ -52,7 +73,109 @@ export interface CalendarItem {
 }
 
 // ---------------------------------------------------------------------------
-// tiny localStorage-backed collection helper
+// Inbox store — GET /api/inbox/conversations,
+// GET /api/inbox/conversations/:id/messages,
+// POST /api/inbox/conversations/:id/reply,
+// POST /api/inbox/conversations/:id/takeover
+// ---------------------------------------------------------------------------
+
+function toConversation(c: ApiConversation): Conversation {
+  return {
+    id: c.id,
+    channel: c.channel,
+    customerName: c.displayName ?? c.externalId,
+    customerHandle: c.externalId,
+    language: '',
+    aiPaused: c.aiPaused,
+    unread: 0,
+    updatedAt: c.updatedAt,
+  };
+}
+
+function toMessage(m: ApiInboxMessage): Message {
+  return {
+    id: m.id,
+    conversationId: m.conversationId,
+    direction: m.direction,
+    author: m.sender,
+    body: m.body,
+    createdAt: m.createdAt,
+  };
+}
+
+export const inboxStore = {
+  async listConversations(): Promise<Conversation[]> {
+    const conversations = await api.listInboxConversations();
+    return conversations.map(toConversation);
+  },
+  async listMessages(conversationId: string): Promise<Message[]> {
+    const { messages } = await api.listInboxMessages(conversationId);
+    return messages.map(toMessage);
+  },
+  /** Human reply — the API records it and auto-pauses the AI (§7.1). */
+  async sendMessage(conversationId: string, body: string): Promise<Message> {
+    const { message } = await api.replyToConversation(conversationId, body);
+    return toMessage(message);
+  },
+  /** Human takeover toggle — pauses/resumes the AI assistant for a thread. */
+  async setAiPaused(conversationId: string, aiPaused: boolean): Promise<Conversation> {
+    const conversation = await api.setConversationTakeover(conversationId, aiPaused);
+    return toConversation(conversation);
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Catalog store — GET/POST/PUT/DELETE /api/catalog/sku-mappings,
+// POST /api/catalog/sync-sale
+// ---------------------------------------------------------------------------
+
+function toSkuMapping(m: ApiSkuMapping): SkuMapping {
+  return {
+    id: m.id,
+    masterSku: m.masterSku,
+    productName: '',
+    shopifySku: m.shopifySku,
+    darazSku: m.darazSku,
+    localSku: m.localSku,
+    stock: m.stock.shopify ?? m.stock.daraz ?? m.stock.local ?? 0,
+    price: m.prices.shopify ?? m.prices.daraz ?? m.prices.local ?? 0,
+    currency: 'PKR',
+    updatedAt: m.updatedAt,
+  };
+}
+
+export const catalogStore = {
+  async listMappings(): Promise<SkuMapping[]> {
+    const mappings = await api.listSkuMappings();
+    return mappings.map(toSkuMapping);
+  },
+  async upsertMapping(input: Omit<SkuMapping, 'id' | 'updatedAt'> & { id?: string }): Promise<SkuMapping> {
+    // The dashboard edits one stock/price for the whole product; the API
+    // tracks them per channel, so the same value is written to all three.
+    const payload = {
+      masterSku: input.masterSku,
+      shopifySku: input.shopifySku,
+      darazSku: input.darazSku,
+      localSku: input.localSku,
+      stock: { shopify: input.stock, daraz: input.stock, local: input.stock },
+      prices: { shopify: input.price, daraz: input.price, local: input.price },
+    };
+    const saved = input.id
+      ? await api.updateSkuMapping(input.id, payload)
+      : await api.createSkuMapping(payload);
+    return toSkuMapping(saved);
+  },
+  async deleteMapping(id: string): Promise<void> {
+    await api.deleteSkuMapping(id);
+  },
+  /** Record a sale on one channel; the API deducts it from every channel. */
+  async syncSale(channel: CatalogChannel, channelSku: string, qty: number): Promise<SyncSaleResult> {
+    return api.syncCatalogSale({ channel, channelSku, qty });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Calendar store — no API exists yet; localStorage-backed.
 // ---------------------------------------------------------------------------
 
 function load<T>(key: string, seed: () => T[]): T[] {
@@ -80,117 +203,6 @@ function nextId(prefix: string): string {
   seq += 1;
   return `${prefix}-${Date.now().toString(36)}-${seq}`;
 }
-
-const nowIso = () => new Date().toISOString();
-
-// ---------------------------------------------------------------------------
-// Inbox store — future endpoints: GET/POST /api/inbox/conversations,
-// POST /api/inbox/conversations/:id/messages, PATCH .../:id (aiPaused)
-// ---------------------------------------------------------------------------
-
-const CONV_KEY = 'cb.inbox.conversations';
-const MSG_KEY = 'cb.inbox.messages';
-
-function seedConversations(): Conversation[] {
-  return [
-    {
-      id: 'conv-1', channel: 'whatsapp', customerName: 'Ali Raza', customerHandle: '+92 300 1234567',
-      language: 'ur', aiPaused: false, unread: 1, updatedAt: nowIso(),
-    },
-    {
-      id: 'conv-2', channel: 'instagram', customerName: 'Sara Khan', customerHandle: '@sara.shops',
-      language: 'en', aiPaused: true, unread: 0, updatedAt: nowIso(),
-    },
-    {
-      id: 'conv-3', channel: 'whatsapp', customerName: 'Ahmed Ali', customerHandle: '+92 321 7654321',
-      language: 'ur', aiPaused: false, unread: 0, updatedAt: nowIso(),
-    },
-  ];
-}
-
-function seedMessages(): Message[] {
-  const t = Date.now();
-  const at = (mins: number) => new Date(t - mins * 60000).toISOString();
-  return [
-    { id: 'm1', conversationId: 'conv-1', direction: 'in', author: 'customer', body: 'Assalam-o-Alaikum, is wall print ki price kya hai?', createdAt: at(32) },
-    { id: 'm2', conversationId: 'conv-1', direction: 'out', author: 'ai', body: 'Walaikum Assalam! Yeh wall print PKR 1,500 ka hai. Kya aap order karna chahenge?', createdAt: at(31) },
-    { id: 'm3', conversationId: 'conv-1', direction: 'in', author: 'customer', body: 'Delivery kitne din mein ho gi?', createdAt: at(5) },
-    { id: 'm4', conversationId: 'conv-2', direction: 'in', author: 'customer', body: 'Hi! Do you deliver to Karachi?', createdAt: at(120) },
-    { id: 'm5', conversationId: 'conv-2', direction: 'out', author: 'human', body: 'Hi Sara! Yes, we deliver to Karachi in 2–3 working days.', createdAt: at(118) },
-    { id: 'm6', conversationId: 'conv-3', direction: 'in', author: 'customer', body: 'Mera order #1042 abhi tak nahi aaya.', createdAt: at(300) },
-    { id: 'm7', conversationId: 'conv-3', direction: 'out', author: 'ai', body: 'Maazrat! Aap ka order courier ke paas hai, kal tak deliver ho jayega. Tracking: CB-88412.', createdAt: at(299) },
-  ];
-}
-
-export const inboxStore = {
-  async listConversations(): Promise<Conversation[]> {
-    return load(CONV_KEY, seedConversations).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  },
-  async listMessages(conversationId: string): Promise<Message[]> {
-    return load(MSG_KEY, seedMessages)
-      .filter((m) => m.conversationId === conversationId)
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  },
-  async sendMessage(conversationId: string, body: string): Promise<Message> {
-    const messages = load(MSG_KEY, seedMessages);
-    const message: Message = {
-      id: nextId('msg'), conversationId, direction: 'out', author: 'human', body, createdAt: nowIso(),
-    };
-    messages.push(message);
-    save(MSG_KEY, messages);
-    const convs = load(CONV_KEY, seedConversations);
-    save(CONV_KEY, convs.map((c) => (c.id === conversationId ? { ...c, updatedAt: nowIso(), unread: 0 } : c)));
-    return message;
-  },
-  /** Human takeover toggle — pauses/resumes the AI assistant for a thread. */
-  async setAiPaused(conversationId: string, aiPaused: boolean): Promise<Conversation> {
-    const convs = load(CONV_KEY, seedConversations);
-    const updated = convs.map((c) => (c.id === conversationId ? { ...c, aiPaused } : c));
-    save(CONV_KEY, updated);
-    const found = updated.find((c) => c.id === conversationId);
-    if (!found) throw new Error('conversation_not_found');
-    return found;
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Catalog store — future endpoints: GET/POST/PUT /api/catalog/sku-mappings
-// ---------------------------------------------------------------------------
-
-const SKU_KEY = 'cb.catalog.skuMappings';
-
-function seedSkus(): SkuMapping[] {
-  return [
-    { id: 'sku-1', masterSku: 'WP-FRAME-001', productName: 'Islamic Wall Print with Frame', shopifySku: 'WP-001-SH', darazSku: 'WP-001-DZ', localSku: 'WP-001-LC', stock: 42, price: 1500, currency: 'PKR', updatedAt: nowIso() },
-    { id: 'sku-2', masterSku: 'LAMP-SUN-002', productName: 'Sunset Lamp 16 Colors', shopifySku: 'LMP-002-SH', darazSku: 'LMP-002-DZ', localSku: 'LMP-002-LC', stock: 17, price: 2200, currency: 'PKR', updatedAt: nowIso() },
-    { id: 'sku-3', masterSku: 'MUG-MAG-003', productName: 'Magic Photo Mug', shopifySku: 'MUG-003-SH', darazSku: undefined, localSku: 'MUG-003-LC', stock: 0, price: 999, currency: 'PKR', updatedAt: nowIso() },
-  ];
-}
-
-export const catalogStore = {
-  async listMappings(): Promise<SkuMapping[]> {
-    return load(SKU_KEY, seedSkus);
-  },
-  async upsertMapping(input: Omit<SkuMapping, 'id' | 'updatedAt'> & { id?: string }): Promise<SkuMapping> {
-    const rows = load(SKU_KEY, seedSkus);
-    if (input.id) {
-      const next = rows.map((r) => (r.id === input.id ? { ...r, ...input, id: r.id, updatedAt: nowIso() } : r));
-      save(SKU_KEY, next);
-      return next.find((r) => r.id === input.id) as SkuMapping;
-    }
-    const row: SkuMapping = { ...input, id: nextId('sku'), updatedAt: nowIso() };
-    rows.push(row);
-    save(SKU_KEY, rows);
-    return row;
-  },
-  async deleteMapping(id: string): Promise<void> {
-    save(SKU_KEY, load(SKU_KEY, seedSkus).filter((r) => r.id !== id));
-  },
-};
-
-// ---------------------------------------------------------------------------
-// Calendar store — future endpoints: GET/POST/DELETE /api/calendar/items
-// ---------------------------------------------------------------------------
 
 const CAL_KEY = 'cb.calendar.items';
 

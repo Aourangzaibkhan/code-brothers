@@ -12,7 +12,9 @@ const emptyDraft: Draft = {
 
 /**
  * Master SKU Mapper (spec §7): one master SKU linked across Shopify, Daraz
- * and the local store. Backed by catalogStore (no API route exists yet).
+ * and the local store. Backed by catalogStore, which calls the real
+ * /api/catalog endpoints. The API has no product-name field, so the product
+ * input is a local label only and is not required.
  */
 export function CatalogPage() {
   const { t } = useTranslation();
@@ -71,7 +73,7 @@ export function CatalogPage() {
           <Input required value={draft.masterSku} onChange={(e) => setDraft({ ...draft, masterSku: e.target.value })} aria-label={t('catalog.masterSku')} />
         </Field>
         <Field label={t('catalog.product')}>
-          <Input required value={draft.productName} onChange={(e) => setDraft({ ...draft, productName: e.target.value })} aria-label={t('catalog.product')} />
+          <Input value={draft.productName} onChange={(e) => setDraft({ ...draft, productName: e.target.value })} aria-label={t('catalog.product')} />
         </Field>
         <Field label={t('catalog.shopifySku')}>
           <Input value={draft.shopifySku} onChange={(e) => setDraft({ ...draft, shopifySku: e.target.value })} aria-label={t('catalog.shopifySku')} />

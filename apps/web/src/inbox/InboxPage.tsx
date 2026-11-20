@@ -5,8 +5,7 @@ import { Button, ErrorBanner, Input, PageHeader } from '../components/ui';
 
 /**
  * Unified Inbox (spec §7): WhatsApp + Instagram threads with human takeover.
- * Backed by inboxStore — the API has no inbox routes yet, so the store keeps
- * the same interface the future /api/inbox endpoints will expose.
+ * Backed by inboxStore, which calls the real /api/inbox endpoints.
  */
 export function InboxPage() {
   const { t } = useTranslation();
@@ -76,7 +75,8 @@ export function InboxPage() {
                   ) : null}
                 </div>
                 <div className="text-xs text-slate-400">
-                  {conv.channel} · {conv.customerHandle} · {conv.language}
+                  {conv.channel} · {conv.customerHandle}
+                  {conv.language ? ` · ${conv.language}` : ''}
                   {conv.aiPaused ? ' · ⏸ AI' : ''}
                 </div>
               </button>
