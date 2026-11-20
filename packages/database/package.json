@@ -1,8 +1,1 @@
-{
-  "name": "@code-brothers/database",
-  "version": "0.1.0",
-  "private": true,
-  "license": "MIT",
-  "main": "src/index.ts",
-  "scripts": { "build": "tsc -b", "test": "vitest run --passWithNoTests", "lint": "eslint src" }
-}
+{"dependencies":{"pg":"^8.13.1"},"devDependencies":{"@types/node":"^22.10.2","@types/pg":"^8.11.10","pg-mem":"^3.0.5","typescript":"^5.7.2"},"license":"MIT","main":"dist/index.js","name":"@code-brothers/database","private":true,"scripts":{"build":"tsc -p tsconfig.json","test":"npm run build && node --test \"dist/**/*.test.js\""},"type":"module","types":"dist/index.d.ts","version":"0.1.0"}

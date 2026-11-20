@@ -1,8 +1,26 @@
 {
-  "name": "@code-brothers/security",
-  "version": "0.1.0",
-  "private": true,
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
   "license": "MIT",
-  "main": "src/index.ts",
-  "scripts": { "build": "tsc -b", "test": "vitest run --passWithNoTests", "lint": "eslint src" }
+  "main": "dist/index.js",
+  "name": "@code-brothers/security",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test \"dist/**/*.test.js\""
+  },
+  "type": "module",
+  "types": "dist/index.d.ts",
+  "version": "0.1.0",
+  "dependencies": {
+    "argon2": "^0.45.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
 }

@@ -1,1 +1,15 @@
-// @code-brothers/core — implementation lands in its build phase.
+import { WorkflowEngine, type EngineOptions } from './engine.js';
+import { createCoreNodeRegistry } from './nodes/index.js';
+
+export * from './types.js';
+export * from './expression.js';
+export * from './cron.js';
+export * from './ssrf.js';
+export * from './queue.js';
+export * from './engine.js';
+export * from './nodes/index.js';
+
+/** Convenience: an engine pre-loaded with all built-in core nodes. */
+export function createEngine(options: EngineOptions = {}): WorkflowEngine {
+  return new WorkflowEngine(createCoreNodeRegistry(), options);
+}
