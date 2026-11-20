@@ -12,3 +12,7 @@ __pycache__/
 *.pyc
 coverage/
 .turbo/
+
+.venv/
+venv/
+dist/
