@@ -8,7 +8,7 @@ import { emailSendNode } from './nodes.js';
 describe('createEmailSender with nodemailer jsonTransport', () => {
   it('resolves with a messageId and the raw JSON message', async () => {
     const sender = createEmailSender({
-      transport: nodemailer.createTransport({ jsonTransport: true }),
+      transporter: nodemailer.createTransport({ jsonTransport: true }),
     });
     const result = await sender.send({
       from: 'sender@example.com',
@@ -30,9 +30,9 @@ describe('createEmailSender with nodemailer jsonTransport', () => {
     assert.match(parsed.text, /See attached/);
   });
 
-  it('accepts a ready-made transporter too', async () => {
+  it('accepts raw transport options ({ jsonTransport: true }) too', async () => {
     const sender = createEmailSender({
-      transporter: nodemailer.createTransport({ jsonTransport: true }),
+      transport: { jsonTransport: true },
     });
     const result = await sender.send({
       from: 'a@b.c',
