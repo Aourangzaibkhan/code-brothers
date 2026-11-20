@@ -36,7 +36,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       const user = await api.me();
-      setPhase({ kind: 'ready', user });
+      if (user && typeof user.email === 'string') {
+        setPhase({ kind: 'ready', user });
+      } else {
+        api.setToken(null);
+        setPhase({ kind: 'login' });
+      }
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) api.setToken(null);
       setPhase({ kind: 'login' });

@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '../components/ui';
-import { diagnoseError, generateWorkflowFromPrompt, type GeneratedWorkflow } from './copilot';
-import { copilotBus } from './copilotBus';
+import { diagnoseError, generateWorkflowFromPrompt, type GeneratedWorkflow } from '../canvas/copilot';
+import { copilotBus } from '../canvas/copilotBus';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
