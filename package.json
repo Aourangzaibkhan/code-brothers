@@ -4,10 +4,12 @@
   "private": true,
   "description": "Free, open-source visual automation + AI assistant platform",
   "license": "MIT",
+  "workspaces": ["apps/*", "packages/*", "packages/connectors/*"],
   "scripts": {
-    "build": "pnpm -r build",
-    "test": "pnpm -r test",
-    "lint": "pnpm -r lint"
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
   },
-  "engines": { "node": ">=20" }
+  "engines": { "node": ">=20" },
+  "devDependencies": { "typescript": "^5.6.0" }
 }
