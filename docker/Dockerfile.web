@@ -1,0 +1,16 @@
+# Code Brothers Web dashboard — multi-stage build, non-root static serving.
+# Build context: repository root.
+#   docker build -f docker/Dockerfile.web -t code-brothers-web .
+#
+# NOTE: apps/web is currently scaffold-stage (TypeScript sources only). Once
+# the React app lands, its production build output is expected in
+# apps/web/dist — the COPY below already targets that directory.
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY . .
+RUN npm ci && npm run build --workspace=@code-brothers/web
+
+# nginx-unprivileged runs as UID 101 by default (non-root) and serves on 8080.
+FROM nginxinc/nginx-unprivileged:alpine
+COPY --from=build /app/apps/web/dist /usr/share/nginx/html
+EXPOSE 8080

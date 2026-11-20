@@ -1,0 +1,22 @@
+# Code Brothers AI media worker (services/ai-media-worker) — Python + ffmpeg.
+# Build context: repository root.
+#   docker build -f docker/Dockerfile.ai-media-worker -t code-brothers-ai-media-worker .
+FROM python:3.12-slim
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /srv/ai-media-worker
+COPY services/ai-media-worker/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+# Optional model extras (large!) — uncomment the ones you need:
+# RUN pip install --no-cache-dir faster-whisper
+# RUN pip install --no-cache-dir paddleocr paddlepaddle
+# RUN pip install --no-cache-dir piper-tts
+COPY services/ai-media-worker/main.py ./
+RUN useradd --create-home worker \
+  && mkdir -p /data/media \
+  && chown -R worker:worker /data/media /srv/ai-media-worker
+USER worker
+ENV CB_MEDIA_DIR=/data/media
+EXPOSE 8000
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

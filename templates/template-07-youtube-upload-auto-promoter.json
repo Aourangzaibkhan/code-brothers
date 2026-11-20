@@ -1,0 +1,81 @@
+{
+  "id": "template-07-youtube-upload-auto-promoter",
+  "name": "YouTube Upload Auto-Promoter",
+  "description": "Spec Section 10 #7. A new YouTube video is published -> AI writes localized promo copy -> shares it to the WhatsApp broadcast list and as an Instagram post/story automatically.",
+  "nodes": [
+    {
+      "id": "trigger",
+      "type": "core.webhookTrigger",
+      "name": "New YouTube Video",
+      "parameters": {
+        "path": "youtube/video-published",
+        "method": "POST"
+      }
+    },
+    {
+      "id": "copy",
+      "type": "core.setData",
+      "name": "AI Promo Copy (Localized)",
+      "parameters": {
+        "assignments": [
+          {
+            "name": "promoText",
+            "value": "{{ $json.aiPromoText }}"
+          }
+        ]
+      }
+    },
+    {
+      "id": "whatsapp",
+      "type": "whatsapp.sendMessage",
+      "name": "WhatsApp Broadcast",
+      "parameters": {
+        "to": "{{ $vars.broadcastPhone }}",
+        "body": "{{ $json.promoText }}\nWatch now: {{ $json.videoUrl }}"
+      }
+    },
+    {
+      "id": "instagram",
+      "type": "instagram.publishPost",
+      "name": "Instagram Post",
+      "parameters": {
+        "imageUrl": "{{ $json.thumbnailUrl }}",
+        "mediaType": "IMAGE",
+        "caption": "{{ $json.promoText }}"
+      }
+    },
+    {
+      "id": "log",
+      "type": "core.log",
+      "name": "Log Promotion",
+      "parameters": {
+        "message": "Promoted video {{ $json.videoUrl }}",
+        "level": "info"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "trigger",
+      "to": "copy"
+    },
+    {
+      "from": "copy",
+      "to": "whatsapp"
+    },
+    {
+      "from": "whatsapp",
+      "to": "instagram"
+    },
+    {
+      "from": "instagram",
+      "to": "log"
+    }
+  ],
+  "settings": {
+    "timezone": "Asia/Karachi",
+    "variables": {
+      "broadcastPhone": ""
+    }
+  }
+}

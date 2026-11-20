@@ -1,0 +1,188 @@
+{
+  "id": "template-01-whatsapp-sales-assistant",
+  "name": "Multilingual WhatsApp AI Sales Assistant (Voice + Text)",
+  "description": "Spec Section 10 #1. Incoming WhatsApp text or voice note -> Whisper transcription (AI media worker) -> RAG catalog search -> stock check -> answer in the customer language, collect address and create a Shopify draft order. Voice branch and text branch merge at \"Normalize Question\".",
+  "nodes": [
+    {
+      "id": "trigger",
+      "type": "core.webhookTrigger",
+      "name": "WhatsApp Incoming Message",
+      "parameters": {
+        "path": "whatsapp/incoming",
+        "method": "POST"
+      }
+    },
+    {
+      "id": "switch-type",
+      "type": "core.switch",
+      "name": "Text or Voice?",
+      "parameters": {
+        "value": "{{ $json.messageType }}",
+        "cases": [
+          {
+            "match": "audio"
+          },
+          {
+            "match": "text"
+          }
+        ]
+      }
+    },
+    {
+      "id": "transcribe",
+      "type": "core.httpRequest",
+      "name": "Transcribe Voice Note",
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-media-worker:8000/transcribe",
+        "body": {
+          "mediaId": "{{ $json.mediaId }}",
+          "language": "{{ $json.language }}"
+        },
+        "responseType": "json"
+      }
+    },
+    {
+      "id": "normalize",
+      "type": "core.setData",
+      "name": "Normalize Question",
+      "parameters": {
+        "assignments": [
+          {
+            "name": "question",
+            "value": "{{ $json.text }}"
+          },
+          {
+            "name": "customerPhone",
+            "value": "{{ $json.from }}"
+          },
+          {
+            "name": "language",
+            "value": "{{ $json.language }}"
+          }
+        ]
+      }
+    },
+    {
+      "id": "catalog-search",
+      "type": "core.httpRequest",
+      "name": "Search Catalog (RAG)",
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:3000/api/rag/search",
+        "body": {
+          "query": "{{ $json.question }}",
+          "limit": 3
+        },
+        "responseType": "json"
+      }
+    },
+    {
+      "id": "check-stock",
+      "type": "core.if",
+      "name": "In Stock?",
+      "parameters": {
+        "left": "{{ $json.results[0].stock }}",
+        "operator": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "reply-answer",
+      "type": "whatsapp.sendMessage",
+      "name": "Send Answer + Price",
+      "parameters": {
+        "to": "{{ $json.customerPhone }}",
+        "body": "{{ $json.results[0].answer }}\nPrice: {{ $json.results[0].price }}"
+      }
+    },
+    {
+      "id": "ask-address",
+      "type": "whatsapp.sendMessage",
+      "name": "Collect Delivery Address",
+      "parameters": {
+        "to": "{{ $json.customerPhone }}",
+        "body": "To place your order, please reply with your full delivery address."
+      }
+    },
+    {
+      "id": "create-order",
+      "type": "shopify.createDraftOrder",
+      "name": "Create Draft Order",
+      "parameters": {
+        "lineItemsJson": "{{ $json.results[0].lineItemsJson }}"
+      }
+    },
+    {
+      "id": "confirm-order",
+      "type": "whatsapp.sendMessage",
+      "name": "Confirm Order",
+      "parameters": {
+        "to": "{{ $json.customerPhone }}",
+        "body": "Your order has been created. Order reference: {{ $json.id }}"
+      }
+    },
+    {
+      "id": "reply-oos",
+      "type": "whatsapp.sendMessage",
+      "name": "Send Out-of-Stock Reply",
+      "parameters": {
+        "to": "{{ $json.customerPhone }}",
+        "body": "Sorry, this item is out of stock right now. We will message you as soon as it is back."
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "trigger",
+      "to": "switch-type"
+    },
+    {
+      "from": "switch-type",
+      "output": 0,
+      "to": "transcribe"
+    },
+    {
+      "from": "switch-type",
+      "output": 1,
+      "to": "normalize"
+    },
+    {
+      "from": "transcribe",
+      "to": "normalize"
+    },
+    {
+      "from": "normalize",
+      "to": "catalog-search"
+    },
+    {
+      "from": "catalog-search",
+      "to": "check-stock"
+    },
+    {
+      "from": "check-stock",
+      "output": 0,
+      "to": "reply-answer"
+    },
+    {
+      "from": "check-stock",
+      "output": 1,
+      "to": "reply-oos"
+    },
+    {
+      "from": "reply-answer",
+      "to": "ask-address"
+    },
+    {
+      "from": "ask-address",
+      "to": "create-order"
+    },
+    {
+      "from": "create-order",
+      "to": "confirm-order"
+    }
+  ],
+  "settings": {
+    "timezone": "Asia/Karachi"
+  }
+}

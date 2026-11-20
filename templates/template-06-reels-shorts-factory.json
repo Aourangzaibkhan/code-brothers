@@ -1,0 +1,121 @@
+{
+  "id": "template-06-reels-shorts-factory",
+  "name": "1-Click Long Video to 5 Reels/Shorts Factory",
+  "description": "Spec Section 10 #6. Drop a long YouTube video -> Whisper transcription -> AI picks the top 5 viral clips -> AI media worker crops each to 9:16 with burned multilingual captions -> uploads to YouTube Shorts and Instagram Reels.",
+  "nodes": [
+    {
+      "id": "trigger",
+      "type": "core.manualTrigger",
+      "name": "Drop Long Video",
+      "parameters": {
+        "payload": {
+          "sourcePath": "",
+          "language": "en"
+        }
+      }
+    },
+    {
+      "id": "transcribe",
+      "type": "core.httpRequest",
+      "name": "Transcribe (Whisper)",
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-media-worker:8000/transcribe",
+        "body": {
+          "filePath": "{{ $json.sourcePath }}",
+          "language": "{{ $json.language }}"
+        },
+        "responseType": "json"
+      }
+    },
+    {
+      "id": "pick-clips",
+      "type": "core.setData",
+      "name": "AI Picks Top 5 Clips",
+      "parameters": {
+        "assignments": [
+          {
+            "name": "clips",
+            "value": "{{ $json.viralClips }}"
+          }
+        ]
+      }
+    },
+    {
+      "id": "loop",
+      "type": "core.loop",
+      "name": "Each Clip",
+      "parameters": {
+        "arrayField": "clips"
+      }
+    },
+    {
+      "id": "clip",
+      "type": "core.httpRequest",
+      "name": "Crop 9:16 + Burn Captions",
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-media-worker:8000/video/clip",
+        "body": {
+          "inputPath": "{{ $json.sourcePath }}",
+          "start": "{{ $json.start }}",
+          "duration": "{{ $json.duration }}",
+          "captions": "{{ $json.captionsPath }}"
+        },
+        "responseType": "json"
+      }
+    },
+    {
+      "id": "yt-upload",
+      "type": "youtube.uploadVideo",
+      "name": "Upload YouTube Short",
+      "parameters": {
+        "title": "{{ $json.title }}",
+        "description": "{{ $json.description }}",
+        "privacyStatus": "public",
+        "tags": "shorts",
+        "contentBase64": "{{ $json.contentBase64 }}",
+        "contentType": "video/mp4"
+      }
+    },
+    {
+      "id": "ig-publish",
+      "type": "instagram.publishPost",
+      "name": "Publish Instagram Reel",
+      "parameters": {
+        "videoUrl": "{{ $json.publicUrl }}",
+        "mediaType": "REELS",
+        "caption": "{{ $json.title }}"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "trigger",
+      "to": "transcribe"
+    },
+    {
+      "from": "transcribe",
+      "to": "pick-clips"
+    },
+    {
+      "from": "pick-clips",
+      "to": "loop"
+    },
+    {
+      "from": "loop",
+      "to": "clip"
+    },
+    {
+      "from": "clip",
+      "to": "yt-upload"
+    },
+    {
+      "from": "yt-upload",
+      "to": "ig-publish"
+    }
+  ],
+  "settings": {
+    "timezone": "Asia/Karachi"
+  }
+}

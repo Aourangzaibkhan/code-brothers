@@ -1,0 +1,75 @@
+{
+  "id": "template-09-abandoned-cart-recovery",
+  "name": "Abandoned Cart Recovery Loop",
+  "description": "Spec Section 10 #9. Shopify/Website checkout abandoned -> wait 2 hours -> if still unpaid, send a polite personalized WhatsApp reminder with a checkout link (the AI Assistant answers follow-up questions in the Unified Inbox).",
+  "nodes": [
+    {
+      "id": "trigger",
+      "type": "core.webhookTrigger",
+      "name": "Checkout Abandoned",
+      "parameters": {
+        "path": "shopify/checkout-abandoned",
+        "method": "POST"
+      }
+    },
+    {
+      "id": "wait",
+      "type": "core.wait",
+      "name": "Wait 2 Hours",
+      "parameters": {
+        "seconds": 7200
+      }
+    },
+    {
+      "id": "unpaid",
+      "type": "core.if",
+      "name": "Still Unpaid?",
+      "parameters": {
+        "left": "{{ $json.paid }}",
+        "operator": "equals",
+        "right": false
+      }
+    },
+    {
+      "id": "remind",
+      "type": "whatsapp.sendMessage",
+      "name": "WhatsApp Reminder",
+      "parameters": {
+        "to": "{{ $json.customerPhone }}",
+        "body": "Hi {{ $json.customerName }}, your cart is still waiting for you. Complete your order here: {{ $json.checkoutUrl }} — reply to this message if you need any help."
+      }
+    },
+    {
+      "id": "done",
+      "type": "core.log",
+      "name": "Already Paid — Skip",
+      "parameters": {
+        "message": "Checkout {{ $json.checkoutId }} was paid, reminder skipped",
+        "level": "info"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "trigger",
+      "to": "wait"
+    },
+    {
+      "from": "wait",
+      "to": "unpaid"
+    },
+    {
+      "from": "unpaid",
+      "output": 0,
+      "to": "remind"
+    },
+    {
+      "from": "unpaid",
+      "output": 1,
+      "to": "done"
+    }
+  ],
+  "settings": {
+    "timezone": "Asia/Karachi"
+  }
+}

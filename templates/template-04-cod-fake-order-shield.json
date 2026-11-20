@@ -1,0 +1,97 @@
+{
+  "id": "template-04-cod-fake-order-shield",
+  "name": "COD Fake-Order Shield",
+  "description": "Spec Section 10 #4. New COD order -> Customer Risk Score lookup by phone -> high-risk buyers get a partial-advance template request; normal buyers get a confirmation message in their own language and the courier is booked once confirmed.",
+  "nodes": [
+    {
+      "id": "trigger",
+      "type": "core.webhookTrigger",
+      "name": "New COD Order",
+      "parameters": {
+        "path": "orders/cod-created",
+        "method": "POST"
+      }
+    },
+    {
+      "id": "risk",
+      "type": "local.dbQuery",
+      "name": "Lookup COD Risk Score",
+      "parameters": {
+        "sql": "SELECT risk_score FROM customers_crm WHERE phone = ?",
+        "valuesJson": "[\"{{ $json.customerPhone }}\"]"
+      }
+    },
+    {
+      "id": "high-risk",
+      "type": "core.if",
+      "name": "High Risk?",
+      "parameters": {
+        "left": "{{ $json.risk_score }}",
+        "operator": "gt",
+        "right": 70
+      }
+    },
+    {
+      "id": "advance",
+      "type": "whatsapp.sendTemplate",
+      "name": "Request Partial Advance",
+      "parameters": {
+        "to": "{{ $json.customerPhone }}",
+        "templateName": "cod_advance_request",
+        "languageCode": "{{ $json.customerLanguage }}"
+      }
+    },
+    {
+      "id": "confirm",
+      "type": "whatsapp.sendMessage",
+      "name": "Send Confirmation",
+      "parameters": {
+        "to": "{{ $json.customerPhone }}",
+        "body": "Please confirm your COD order {{ $json.orderId }} of {{ $json.total }}. Reply YES to confirm."
+      }
+    },
+    {
+      "id": "book",
+      "type": "courier.bookShipment",
+      "name": "Book Courier (Confirmed)",
+      "parameters": {
+        "preset": "tcs",
+        "receiverName": "{{ $json.customerName }}",
+        "receiverPhone": "{{ $json.customerPhone }}",
+        "receiverAddress": "{{ $json.address }}",
+        "receiverCity": "{{ $json.city }}",
+        "receiverCountry": "PK",
+        "codAmount": "{{ $json.total }}",
+        "currency": "PKR",
+        "description": "COD order {{ $json.orderId }}"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "trigger",
+      "to": "risk"
+    },
+    {
+      "from": "risk",
+      "to": "high-risk"
+    },
+    {
+      "from": "high-risk",
+      "output": 0,
+      "to": "advance"
+    },
+    {
+      "from": "high-risk",
+      "output": 1,
+      "to": "confirm"
+    },
+    {
+      "from": "confirm",
+      "to": "book"
+    }
+  ],
+  "settings": {
+    "timezone": "Asia/Karachi"
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "id": "template-03-stock-sync-3-channel",
+  "name": "Unified 3-Channel Stock Sync",
+  "description": "Spec Section 10 #3. A sale on Shopify instantly deducts the mapped Master SKU stock on Daraz and the local website (and refreshes the Shopify level). Duplicate this workflow with a Daraz or WooCommerce trigger to sync sales from the other channels too.",
+  "nodes": [
+    {
+      "id": "trigger",
+      "type": "core.webhookTrigger",
+      "name": "Shopify Order Created",
+      "parameters": {
+        "path": "shopify/order-created",
+        "method": "POST"
+      }
+    },
+    {
+      "id": "loop",
+      "type": "core.loop",
+      "name": "Each Line Item",
+      "parameters": {
+        "arrayField": "lineItems"
+      }
+    },
+    {
+      "id": "daraz-stock",
+      "type": "daraz.updateStock",
+      "name": "Deduct Daraz Stock",
+      "parameters": {
+        "sellerSku": "{{ $json.sellerSku }}",
+        "quantity": "{{ $json.remainingStock }}"
+      }
+    },
+    {
+      "id": "shopify-stock",
+      "type": "shopify.updateInventory",
+      "name": "Refresh Shopify Level",
+      "parameters": {
+        "locationId": "{{ $vars.shopifyLocationId }}",
+        "inventoryItemId": "{{ $json.inventoryItemId }}",
+        "available": "{{ $json.remainingStock }}"
+      }
+    },
+    {
+      "id": "local-stock",
+      "type": "local.dbQuery",
+      "name": "Deduct Local Stock",
+      "parameters": {
+        "sql": "UPDATE products SET stock = stock - ? WHERE master_sku = ?",
+        "valuesJson": "[\"{{ $json.quantity }}\", \"{{ $json.masterSku }}\"]"
+      }
+    },
+    {
+      "id": "log",
+      "type": "core.log",
+      "name": "Log Sync",
+      "parameters": {
+        "message": "Stock synced across 3 channels for {{ $json.masterSku }}",
+        "level": "info"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "trigger",
+      "to": "loop"
+    },
+    {
+      "from": "loop",
+      "to": "daraz-stock"
+    },
+    {
+      "from": "daraz-stock",
+      "to": "shopify-stock"
+    },
+    {
+      "from": "shopify-stock",
+      "to": "local-stock"
+    },
+    {
+      "from": "local-stock",
+      "to": "log"
+    }
+  ],
+  "settings": {
+    "timezone": "Asia/Karachi",
+    "variables": {
+      "shopifyLocationId": ""
+    }
+  }
+}

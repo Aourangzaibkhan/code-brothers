@@ -1,4 +1,20 @@
-fastapi
-uvicorn
-faster-whisper
-paddleocr
+# Code Brothers AI media worker — runtime dependencies (Python 3.12)
+fastapi>=0.115
+uvicorn>=0.30
+python-multipart>=0.0.9
+
+# --- Optional model extras (NOT installed by default) -----------------------
+# The service starts and serves /health and /video/clip without any of these.
+# An endpoint whose model is missing returns HTTP 503 with a clear message.
+#
+#   pip install faster-whisper
+#       -> enables POST /transcribe (speech-to-text, Whisper STT)
+#
+#   pip install paddleocr paddlepaddle
+#       -> enables POST /ocr (payment-screenshot / image OCR)
+#
+#   pip install piper-tts
+#       -> enables POST /tts (text-to-speech). You must ALSO download at
+#          least one Piper voice (.onnx + .onnx.json) into the directory
+#          named by the CB_PIPER_VOICES_DIR env var (default: <media>/voices).
+#          Free voices: https://huggingface.co/rhasspy/piper-voices

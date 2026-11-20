@@ -1,0 +1,120 @@
+{
+  "id": "template-08-comment-growth-spam-shield",
+  "name": "AI Comment Growth & Spam Shield",
+  "description": "Spec Section 10 #8. Every 15 minutes: fetch new YouTube comments -> AI classification (spam / lead / question) -> spam is hidden, leads get a reply with the purchase link, questions get a natural AI answer in the viewer language.",
+  "nodes": [
+    {
+      "id": "trigger",
+      "type": "core.cronTrigger",
+      "name": "Every 15 Minutes",
+      "parameters": {
+        "expression": "*/15 * * * *"
+      }
+    },
+    {
+      "id": "fetch",
+      "type": "core.httpRequest",
+      "name": "Fetch YouTube Comments",
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId={{ $vars.monitoredVideoId }}&maxResults=50",
+        "responseType": "json"
+      }
+    },
+    {
+      "id": "loop",
+      "type": "core.loop",
+      "name": "Each Comment",
+      "parameters": {
+        "arrayField": "items"
+      }
+    },
+    {
+      "id": "classify",
+      "type": "core.switch",
+      "name": "Spam / Lead / Question",
+      "parameters": {
+        "value": "{{ $json.classification }}",
+        "cases": [
+          {
+            "match": "spam"
+          },
+          {
+            "match": "lead"
+          },
+          {
+            "match": "question"
+          }
+        ]
+      }
+    },
+    {
+      "id": "hide-spam",
+      "type": "core.httpRequest",
+      "name": "Hide Spam Comment",
+      "parameters": {
+        "method": "POST",
+        "url": "https://www.googleapis.com/youtube/v3/comments/setModerationStatus",
+        "body": {
+          "id": "{{ $json.commentId }}",
+          "moderationStatus": "rejected"
+        },
+        "responseType": "json"
+      }
+    },
+    {
+      "id": "reply-lead",
+      "type": "youtube.replyComment",
+      "name": "Reply to Lead",
+      "parameters": {
+        "commentId": "{{ $json.commentId }}",
+        "text": "Thanks for watching! You can order here: {{ $vars.productLink }}"
+      }
+    },
+    {
+      "id": "reply-question",
+      "type": "youtube.replyComment",
+      "name": "Reply to Question",
+      "parameters": {
+        "commentId": "{{ $json.commentId }}",
+        "text": "{{ $json.aiAnswer }}"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "trigger",
+      "to": "fetch"
+    },
+    {
+      "from": "fetch",
+      "to": "loop"
+    },
+    {
+      "from": "loop",
+      "to": "classify"
+    },
+    {
+      "from": "classify",
+      "output": 0,
+      "to": "hide-spam"
+    },
+    {
+      "from": "classify",
+      "output": 1,
+      "to": "reply-lead"
+    },
+    {
+      "from": "classify",
+      "output": 2,
+      "to": "reply-question"
+    }
+  ],
+  "settings": {
+    "timezone": "Asia/Karachi",
+    "variables": {
+      "monitoredVideoId": "",
+      "productLink": "https://your-store.example/product"
+    }
+  }
+}

@@ -56,6 +56,12 @@ import {
   type UserRecord,
   type WorkflowRecord,
 } from './store.js';
+import {
+  createOpsState,
+  registerOpsModules,
+  type CourierCredentials,
+  type OpsState,
+} from './modules/index.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -81,12 +87,22 @@ export interface ApiOptions {
   now?: () => number;
   /** Pre-built stores (defaults to in-memory). */
   stores?: Stores;
+  /** Pre-built business/ops module state (spec §7; defaults to fresh). */
+  ops?: OpsState;
+  /** Injectable courier HTTP transport (tests pass a mock fetch). */
+  courierFetch?: typeof fetch;
+  /** Fallback courier credentials when a request carries none. */
+  courierCredentials?: CourierCredentials;
+  /** Fallback courier base URL override (sandbox / local mock). */
+  courierBaseUrl?: string;
   logger?: boolean;
 }
 
 export interface BuiltApi {
   app: FastifyInstance;
   stores: Stores;
+  /** Business/ops module state (spec §7) — snapshot/restore live here. */
+  ops: OpsState;
   setupTokenService: SetupTokenService;
   /** The one-time setup token, present only while setup is still pending. */
   setupToken?: string;
@@ -152,6 +168,7 @@ function ipMatches(ip: string, rule: string): boolean {
 export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
   const now = options.now ?? Date.now;
   const stores = options.stores ?? createMemoryStores();
+  const ops = options.ops ?? createOpsState();
   const throttle = options.throttle ?? new LoginThrottle();
   const setupTokenService = options.setupTokenService ?? new SetupTokenService();
   const sessionTtlMs = options.sessionTtlMs ?? 24 * 60 * 60 * 1000;
@@ -953,6 +970,22 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
     return { halted: false };
   });
 
+  // -- business & operations modules (spec §7) --------------------------------
+  // SKU mapper, customers/orders, COD fraud shield, TID ledger, unified
+  // inbox + approval queue, courier hub, CEO digest, encrypted backups.
+  registerOpsModules(app, {
+    ops,
+    stores,
+    masterKey,
+    requireAuth,
+    requireOwner,
+    audit,
+    now,
+    courierFetch: options.courierFetch,
+    courierCredentials: options.courierCredentials,
+    courierBaseUrl: options.courierBaseUrl,
+  });
+
   // -- webhook gateway (public, HMAC-authenticated) ------------------------------
 
   await app.register(async (hooks) => {
@@ -1071,5 +1104,5 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
   const ownerAtBoot = await stores.users.findOwner();
   const setupToken = ownerAtBoot ? undefined : setupTokenService.generateSetupToken();
 
-  return { app, stores, setupTokenService, setupToken, masterKeyConfigured };
+  return { app, stores, ops, setupTokenService, setupToken, masterKeyConfigured };
 }

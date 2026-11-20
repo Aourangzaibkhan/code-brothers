@@ -1,0 +1,150 @@
+{
+  "id": "template-02-payment-screenshot-verifier",
+  "name": "Payment Screenshot Auto-Verifier",
+  "description": "Spec Section 10 #2. Buyer sends a JazzCash/EasyPaisa/UPI/PIX/bank receipt on WhatsApp -> OCR (AI media worker) extracts Amount & TID -> duplicate TID check against the payment_tids ledger -> order marked Paid -> courier booked -> tracking slip sent on WhatsApp.",
+  "nodes": [
+    {
+      "id": "trigger",
+      "type": "core.webhookTrigger",
+      "name": "Payment Screenshot Received",
+      "parameters": {
+        "path": "whatsapp/payment-screenshot",
+        "method": "POST"
+      }
+    },
+    {
+      "id": "ocr",
+      "type": "core.httpRequest",
+      "name": "OCR Receipt",
+      "parameters": {
+        "method": "POST",
+        "url": "http://ai-media-worker:8000/ocr",
+        "body": {
+          "mediaId": "{{ $json.mediaId }}"
+        },
+        "responseType": "json"
+      }
+    },
+    {
+      "id": "extract",
+      "type": "core.setData",
+      "name": "Extract Amount + TID",
+      "parameters": {
+        "assignments": [
+          {
+            "name": "tid",
+            "value": "{{ $json.extracted.tid }}"
+          },
+          {
+            "name": "amount",
+            "value": "{{ $json.extracted.amount }}"
+          },
+          {
+            "name": "orderId",
+            "value": "{{ $json.orderId }}"
+          }
+        ]
+      }
+    },
+    {
+      "id": "tid-check",
+      "type": "local.dbQuery",
+      "name": "Check TID Ledger",
+      "parameters": {
+        "sql": "SELECT COUNT(*) AS duplicates FROM payment_tids WHERE tid = ?",
+        "valuesJson": "[\"{{ $json.tid }}\"]"
+      }
+    },
+    {
+      "id": "duplicate",
+      "type": "core.if",
+      "name": "Duplicate TID?",
+      "parameters": {
+        "left": "{{ $json.duplicates }}",
+        "operator": "gt",
+        "right": 0
+      }
+    },
+    {
+      "id": "warn-duplicate",
+      "type": "whatsapp.sendMessage",
+      "name": "Warn Duplicate TID",
+      "parameters": {
+        "to": "{{ $json.customerPhone }}",
+        "body": "This transaction ID has already been used. Please send a new payment receipt."
+      }
+    },
+    {
+      "id": "record-tid",
+      "type": "local.dbQuery",
+      "name": "Record TID + Mark Paid",
+      "parameters": {
+        "sql": "INSERT INTO payment_tids (tid, amount, order_id) VALUES (?, ?, ?)",
+        "valuesJson": "[\"{{ $json.tid }}\", \"{{ $json.amount }}\", \"{{ $json.orderId }}\"]"
+      }
+    },
+    {
+      "id": "book-courier",
+      "type": "courier.bookShipment",
+      "name": "Book Courier",
+      "parameters": {
+        "preset": "expergo",
+        "receiverName": "{{ $json.customerName }}",
+        "receiverPhone": "{{ $json.customerPhone }}",
+        "receiverAddress": "{{ $json.address }}",
+        "receiverCity": "{{ $json.city }}",
+        "receiverCountry": "PK",
+        "codAmount": 0,
+        "description": "Prepaid order {{ $json.orderId }}"
+      }
+    },
+    {
+      "id": "send-slip",
+      "type": "whatsapp.sendMessage",
+      "name": "Send Tracking Slip",
+      "parameters": {
+        "to": "{{ $json.customerPhone }}",
+        "body": "Payment verified. Your order {{ $json.orderId }} is booked. Tracking number: {{ $json.awb }}"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "trigger",
+      "to": "ocr"
+    },
+    {
+      "from": "ocr",
+      "to": "extract"
+    },
+    {
+      "from": "extract",
+      "to": "tid-check"
+    },
+    {
+      "from": "tid-check",
+      "to": "duplicate"
+    },
+    {
+      "from": "duplicate",
+      "output": 0,
+      "to": "warn-duplicate"
+    },
+    {
+      "from": "duplicate",
+      "output": 1,
+      "to": "record-tid"
+    },
+    {
+      "from": "record-tid",
+      "to": "book-courier"
+    },
+    {
+      "from": "book-courier",
+      "to": "send-slip"
+    }
+  ],
+  "settings": {
+    "timezone": "Asia/Karachi"
+  }
+}

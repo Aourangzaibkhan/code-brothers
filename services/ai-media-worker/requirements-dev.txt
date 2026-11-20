@@ -1,0 +1,3 @@
+# Dev/test-only dependencies for the AI media worker (not needed in production)
+pytest>=8.0
+httpx>=0.27

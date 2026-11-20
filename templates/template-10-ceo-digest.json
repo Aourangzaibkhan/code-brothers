@@ -1,0 +1,112 @@
+{
+  "id": "template-10-ceo-digest",
+  "name": "Daily CEO WhatsApp Digest",
+  "description": "Spec Section 10 #10. Every night at 22:00 -> aggregates Shopify + Daraz + Local Website orders, revenue, returns and top SKUs -> builds a PDF summary -> sends it to the owner on WhatsApp.",
+  "nodes": [
+    {
+      "id": "trigger",
+      "type": "core.cronTrigger",
+      "name": "Daily 22:00",
+      "parameters": {
+        "expression": "0 22 * * *"
+      }
+    },
+    {
+      "id": "shopify-orders",
+      "type": "shopify.getOrders",
+      "name": "Shopify Orders",
+      "parameters": {
+        "status": "any",
+        "limit": 250
+      }
+    },
+    {
+      "id": "daraz-orders",
+      "type": "daraz.getOrders",
+      "name": "Daraz Orders",
+      "parameters": {
+        "limit": 250
+      }
+    },
+    {
+      "id": "woo-orders",
+      "type": "local.wooGetOrders",
+      "name": "Local Website Orders",
+      "parameters": {
+        "status": "completed",
+        "perPage": 100
+      }
+    },
+    {
+      "id": "aggregate",
+      "type": "core.setData",
+      "name": "Aggregate Daily Totals",
+      "parameters": {
+        "assignments": [
+          {
+            "name": "digestText",
+            "value": "{{ $json.digestText }}"
+          },
+          {
+            "name": "totalRevenue",
+            "value": "{{ $json.totalRevenue }}"
+          },
+          {
+            "name": "totalOrders",
+            "value": "{{ $json.totalOrders }}"
+          }
+        ]
+      }
+    },
+    {
+      "id": "pdf",
+      "type": "core.pdfGenerate",
+      "name": "Build PDF Digest",
+      "parameters": {
+        "title": "Daily CEO Digest",
+        "text": "{{ $json.digestText }}"
+      }
+    },
+    {
+      "id": "send",
+      "type": "whatsapp.sendMessage",
+      "name": "Send Digest to Owner",
+      "parameters": {
+        "to": "{{ $vars.ownerPhone }}",
+        "body": "Daily Digest: {{ $json.totalOrders }} orders, revenue {{ $json.totalRevenue }}. Full PDF report attached in the dashboard."
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "trigger",
+      "to": "shopify-orders"
+    },
+    {
+      "from": "shopify-orders",
+      "to": "daraz-orders"
+    },
+    {
+      "from": "daraz-orders",
+      "to": "woo-orders"
+    },
+    {
+      "from": "woo-orders",
+      "to": "aggregate"
+    },
+    {
+      "from": "aggregate",
+      "to": "pdf"
+    },
+    {
+      "from": "pdf",
+      "to": "send"
+    }
+  ],
+  "settings": {
+    "timezone": "Asia/Karachi",
+    "variables": {
+      "ownerPhone": ""
+    }
+  }
+}

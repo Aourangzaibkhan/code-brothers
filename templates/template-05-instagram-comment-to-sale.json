@@ -1,0 +1,79 @@
+{
+  "id": "template-05-instagram-comment-to-sale",
+  "name": "Instagram Comment-to-Sale Bot",
+  "description": "Spec Section 10 #5. A comment containing the trigger keyword on a Reel gets an instant public reply plus a private DM with the product link; the AI Assistant handles follow-up questions in the Unified Inbox.",
+  "nodes": [
+    {
+      "id": "trigger",
+      "type": "core.webhookTrigger",
+      "name": "Instagram Comment",
+      "parameters": {
+        "path": "instagram/comments",
+        "method": "POST"
+      }
+    },
+    {
+      "id": "keyword",
+      "type": "core.if",
+      "name": "Asks for Price?",
+      "parameters": {
+        "left": "{{ $json.text }}",
+        "operator": "contains",
+        "right": "price"
+      }
+    },
+    {
+      "id": "public-reply",
+      "type": "instagram.replyComment",
+      "name": "Public Reply",
+      "parameters": {
+        "commentId": "{{ $json.commentId }}",
+        "message": "Price and order link sent to your DM."
+      }
+    },
+    {
+      "id": "dm",
+      "type": "instagram.sendDm",
+      "name": "DM Product Link",
+      "parameters": {
+        "recipientId": "{{ $json.userId }}",
+        "message": "Hi! Here is the product link: {{ $vars.productLink }} — reply here if you have any questions."
+      }
+    },
+    {
+      "id": "ignore",
+      "type": "core.log",
+      "name": "Ignore Other Comments",
+      "parameters": {
+        "message": "Comment without trigger keyword skipped",
+        "level": "debug"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "trigger",
+      "to": "keyword"
+    },
+    {
+      "from": "keyword",
+      "output": 0,
+      "to": "public-reply"
+    },
+    {
+      "from": "keyword",
+      "output": 1,
+      "to": "ignore"
+    },
+    {
+      "from": "public-reply",
+      "to": "dm"
+    }
+  ],
+  "settings": {
+    "timezone": "Asia/Karachi",
+    "variables": {
+      "productLink": "https://your-store.example/product"
+    }
+  }
+}

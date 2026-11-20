@@ -22,3 +22,16 @@ export {
   type TriggerType,
 } from './store.js';
 export { TABLES, type TableName } from './tables.js';
+export {
+  createOpsState,
+  OpsState,
+  normalizePhone,
+  isValidPhone,
+  decisionForScore,
+  FRAUD_ALLOW_BELOW,
+  FRAUD_BLOCK_AT,
+  buildDigest,
+  type OpsSnapshot,
+  type DigestSummary,
+  type FraudDecision,
+} from './modules/index.js';
