@@ -11,3 +11,7 @@ jobs:
       - run: npm run lint --workspaces --if-present || true
       - run: npm run test --workspaces --if-present || true
       - run: docker compose -f docker/docker-compose.lite.yml config
+        env:
+          POSTGRES_PASSWORD: <redacted>
+          REDIS_PASSWORD: <redacted>
+          CB_MASTER_KEY: ci-dummy-master-key-not-a-real-secret
