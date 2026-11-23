@@ -5,10 +5,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: pnpm }
-      - run: pnpm install --frozen-lockfile || pnpm install
-      - run: pnpm -r lint || true
-      - run: pnpm -r test || true
+        with: { node-version: 20, cache: npm }
+      - run: npm ci || npm install
+      - run: npm run lint --workspaces --if-present || true
+      - run: npm run test --workspaces --if-present || true
       - run: docker compose -f docker/docker-compose.lite.yml config
