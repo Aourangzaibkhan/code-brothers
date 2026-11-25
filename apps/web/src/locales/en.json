@@ -186,6 +186,11 @@
     "insert": "Insert into canvas",
     "generated": "Here is a workflow I generated from your description. Review it, then insert it into the canvas.",
     "noMatch": "I could not map that to nodes yet. Mention a trigger (webhook, schedule, manual) and an action (whatsapp, email, http, shopify, daraz, instagram, youtube…).",
-    "open": "Open Copilot"
+    "open": "Open Copilot",
+    "aiChecking": "Checking AI availability…",
+    "aiReady": "AI assistant ready via {{providers}}.",
+    "aiNotConfiguredShort": "AI not configured — using the built-in workflow generator.",
+    "aiNotConfigured": "No AI provider is configured, so this answer comes from the built-in workflow generator, not an AI model.",
+    "aiUnavailable": "The AI assistant is unavailable right now, so this answer comes from the built-in workflow generator."
   }
 }

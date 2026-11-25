@@ -12,6 +12,9 @@
   ],
   "references": [
     {
+      "path": "../../packages/ai-engine"
+    },
+    {
       "path": "../../packages/core"
     },
     {

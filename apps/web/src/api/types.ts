@@ -1,5 +1,26 @@
 /** Types mirroring the apps/api (Fastify) response shapes exactly. */
 
+/** AI Copilot chat (POST /api/ai/chat, GET /api/ai/status). */
+export interface ChatMessageInput {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+export interface AssistantStatus {
+  configured: boolean;
+  providers: string[];
+  coolingDown: string[];
+  message: string;
+}
+
+export interface AssistantChatResult {
+  text: string;
+  provider: string;
+  model: string;
+  usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number };
+  attempts?: Array<{ provider: string; ok: boolean; status?: number; error?: string }>;
+}
+
 export interface PublicUser {
   id: string;
   email: string;

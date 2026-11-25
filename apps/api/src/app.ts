@@ -70,6 +70,11 @@ import {
   registerRagRoutes,
   type RagState,
 } from './modules/rag.js';
+import {
+  buildNamedAiRouterFromEnv,
+  registerAiRoutes,
+  type NamedRouter,
+} from './modules/ai-chat.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -100,6 +105,13 @@ export interface ApiOptions {
   /** Pre-built RAG state (defaults to fresh, in-memory). */
   rag?: RagState;
   /**
+   * Pre-built AI router (defaults to building from env: OLLAMA_HOST,
+   * GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY). Tests inject a
+   * stub router here; pass { router: null, providerNames: [] } to simulate
+   * "no provider configured" (the chat route then answers 503).
+   */
+  ai?: NamedRouter;
+  /**
    * Pg pool for RAG document persistence (DATABASE_URL set). Documents are
    * written to knowledge_documents on add and re-indexed at boot; without
    * it the RAG state is purely in-memory.
@@ -129,6 +141,8 @@ export interface BuiltApi {
   ops: OpsState;
   /** RAG knowledge state (documents + vector store). */
   rag: RagState;
+  /** AI Copilot router (null when no provider is configured). */
+  ai: NamedRouter;
   setupTokenService: SetupTokenService;
   /** The one-time setup token, present only while setup is still pending. */
   setupToken?: string;
@@ -1044,6 +1058,12 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
   // -- retrieval for the WhatsApp sales-assistant template ----------------
   registerRagRoutes(app, { rag, ops, requireAuth, requireOwner });
 
+  // -- AI Copilot chat (spec §4A/§4C) ------------------------------------------
+  // The router is built once at boot from env (OLLAMA_HOST, GEMINI_API_KEY,
+  // GROQ_API_KEY, OPENROUTER_API_KEY); null when nothing is configured.
+  const ai = options.ai ?? buildNamedAiRouterFromEnv();
+  registerAiRoutes(app, { ai, requireAuth });
+
   // -- webhook gateway (public, HMAC-authenticated) ------------------------------
 
   await app.register(async (hooks) => {
@@ -1162,5 +1182,5 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
   const ownerAtBoot = await stores.users.findOwner();
   const setupToken = ownerAtBoot ? undefined : setupTokenService.generateSetupToken();
 
-  return { app, stores, ops, rag, setupTokenService, setupToken, masterKeyConfigured };
+  return { app, stores, ops, rag, ai, setupTokenService, setupToken, masterKeyConfigured };
 }

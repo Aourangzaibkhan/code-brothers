@@ -6,7 +6,7 @@ A self-hosted n8n/Zapier alternative with a built-in free AI assistant and enter
 
 ## Highlights
 - Drag-and-drop visual workflow builder (React Flow) with 11 languages + RTL (Urdu, Arabic)
-- Built-in AI Copilot: local Ollama + free cloud AI (Gemini, Groq, OpenRouter) with automatic fallback
+- Built-in AI Copilot: local Ollama + free cloud AI (Gemini, Groq, OpenRouter) with automatic fallback — bring your own Ollama install or free-tier API keys (set `OLLAMA_HOST` / `GEMINI_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` in `.env`); with no provider configured the Copilot answers 503 and the dashboard falls back to its built-in workflow generator, labelled as such
 - WhatsApp dual engine (Free QR + Official Cloud API) with anti-ban queue
 - Master SKU sync across Shopify, Daraz and local stores + COD Fraud Shield
 - Zero-trust security: AES-256-GCM envelope vault, SSRF firewall, V8 sandbox, TOTP 2FA, kill switch

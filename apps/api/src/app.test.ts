@@ -664,3 +664,90 @@ describe('security center', () => {
     assert.equal(runAfter.statusCode, 201);
   });
 });
+
+describe('AI Copilot chat', () => {
+  it('routes a chat through the injected provider and reports status', async (t) => {
+    const stubRouter = {
+      name: 'hybrid-router',
+      coolingDown: () => [],
+      route: async () => ({
+        result: {
+          text: 'Use a webhook trigger, then whatsapp.sendMessage.',
+          provider: 'stub',
+          model: 'stub-model',
+        },
+        provider: 'stub',
+        attempts: [{ provider: 'stub', ok: true }],
+      }),
+    };
+    const built = await buildApp({
+      masterKey: MASTER_KEY,
+      ai: {
+        router: stubRouter as unknown as import('./modules/ai-chat.js').NamedRouter['router'],
+        providerNames: ['stub'],
+      },
+    });
+    t.after(async () => {
+      await built.app.close();
+    });
+    const claim = await claimOwner(built);
+    const token = claim.token;
+
+    const status = await built.app.inject({
+      method: 'GET',
+      url: '/api/ai/status',
+      headers: auth(token),
+    });
+    assert.equal(status.statusCode, 200);
+    assert.equal((status.json() as { configured: boolean }).configured, true);
+    assert.deepEqual((status.json() as { providers: string[] }).providers, ['stub']);
+
+    const chat = await built.app.inject({
+      method: 'POST',
+      url: '/api/ai/chat',
+      headers: auth(token),
+      payload: { messages: [{ role: 'user', content: 'how do I send a WhatsApp message?' }] },
+    });
+    assert.equal(chat.statusCode, 200, chat.body);
+    const body = chat.json() as { text: string; provider: string; model: string };
+    assert.equal(body.provider, 'stub');
+    assert.equal(body.model, 'stub-model');
+    assert.match(body.text, /webhook trigger/);
+
+    const bad = await built.app.inject({
+      method: 'POST',
+      url: '/api/ai/chat',
+      headers: auth(token),
+      payload: { messages: [] },
+    });
+    assert.equal(bad.statusCode, 400);
+  });
+
+  it('answers 503 with no provider configured (never fakes an AI reply)', async (t) => {
+    const built = await buildApp({
+      masterKey: MASTER_KEY,
+      ai: { router: null, providerNames: [] },
+    });
+    t.after(async () => {
+      await built.app.close();
+    });
+    const claim = await claimOwner(built);
+    const token = claim.token;
+
+    const status = await built.app.inject({
+      method: 'GET',
+      url: '/api/ai/status',
+      headers: auth(token),
+    });
+    assert.equal((status.json() as { configured: boolean }).configured, false);
+
+    const chat = await built.app.inject({
+      method: 'POST',
+      url: '/api/ai/chat',
+      headers: auth(token),
+      payload: { messages: [{ role: 'user', content: 'hello' }] },
+    });
+    assert.equal(chat.statusCode, 503);
+    assert.equal((chat.json() as { error: string }).error, 'no_ai_provider_configured');
+  });
+});

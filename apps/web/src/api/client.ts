@@ -2,7 +2,10 @@ import type {
   ApiConversation,
   ApiInboxMessage,
   ApiSkuMapping,
+  AssistantChatResult,
+  AssistantStatus,
   AuditLogEntry,
+  ChatMessageInput,
   ClaimResult,
   CredentialMeta,
   Execution,
@@ -288,6 +291,18 @@ export class ApiClient {
 
   resumePlatform(): Promise<{ halted: boolean }> {
     return this.request('POST', '/api/security/resume', {});
+  }
+
+  // -- AI Copilot chat (spec §4A/§4C) -------------------------------------------
+  // Real model answers via POST /api/ai/chat. 503 no_ai_provider_configured
+  // means no provider is set up — the drawer then falls back to the local
+  // workflow generator and says so, instead of pretending it is AI.
+  assistantStatus(): Promise<AssistantStatus> {
+    return this.request('GET', '/api/ai/status');
+  }
+
+  assistantChat(messages: ChatMessageInput[]): Promise<AssistantChatResult> {
+    return this.request('POST', '/api/ai/chat', { messages });
   }
 
   // -- unified inbox (spec §7.1) --------------------------------------------------
