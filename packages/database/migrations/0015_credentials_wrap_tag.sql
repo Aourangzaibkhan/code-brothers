@@ -1,0 +1,11 @@
+-- 0015_credentials_wrap_tag.sql
+-- The credentials table stored the envelope-encrypted secret across five
+-- bytea columns (ciphertext, iv, auth_tag, dek_wrapped, dek_iv) but had no
+-- column for the DEK-wrap GCM auth tag (EncryptedSecret.wrapAuthTag), so a
+-- credential written through the Pg repositories could never be decrypted
+-- back. Adds the missing column.
+--
+-- Nullable on purpose: rows written before this migration (if any) simply
+-- cannot be decrypted and must be re-created by the owner; the migration
+-- itself must never fail on an existing database.
+ALTER TABLE credentials ADD COLUMN IF NOT EXISTS dek_wrap_auth_tag bytea;

@@ -17,9 +17,17 @@
  * Persistence: documents live in memory in this build; the Pg-backed
  * knowledge_documents table (migrations 0006/0007) is wired in when a
  * DATABASE_URL pool is attached (see gap 3).
+ *
+ * When a pool is attached (RagState.pool), every added document is also
+ * written to knowledge_documents, and loadRagDocuments() re-indexes the
+ * owner's rows into the in-memory vector store at boot (vectors are
+ * rebuilt with the keyless HashEmbedder — the pgvector embeddings table
+ * is only used when the pgvector extension is installed). Without a pool
+ * the state is purely in-memory and documents are lost on restart.
  */
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { Pool } from '@code-brothers/database';
 import {
   HashEmbedder,
   InMemoryVectorStore,
@@ -51,6 +59,8 @@ export interface RagState {
   store: InMemoryVectorStore;
   embedder: HashEmbedder;
   workspaceId: string;
+  /** Attached Pg pool (DATABASE_URL set) — documents persist across restarts. */
+  pool?: Pool;
 }
 
 export function createRagState(workspaceId = 'default'): RagState {
@@ -65,6 +75,7 @@ export function createRagState(workspaceId = 'default'): RagState {
 export async function addRagDocument(
   state: RagState,
   doc: Omit<RagDocument, 'id'> & { id?: string },
+  opts: { userId?: string; persist?: boolean } = {},
 ): Promise<RagDocument> {
   const full: RagDocument = {
     id: doc.id ?? randomUUID(),
@@ -83,7 +94,60 @@ export async function addRagDocument(
     chunks.map((chunk, i) => ({ ...chunk, embedding: embeddings[i] ?? [] })),
   );
   state.documents.set(full.id, full);
+  // Persist alongside the in-memory index when a pool + owner are known.
+  if (state.pool && opts.userId && opts.persist !== false) {
+    await state.pool.query(
+      `INSERT INTO knowledge_documents (id, user_id, workspace_id, title, source_type, content, metadata)
+       VALUES ($1, $2, $3, $4, 'manual', $5, $6::jsonb)
+       ON CONFLICT (id) DO NOTHING`,
+      [
+        full.id,
+        opts.userId,
+        opts.userId,
+        full.title,
+        full.content,
+        JSON.stringify(full.metadata ?? {}),
+      ],
+    );
+  }
   return full;
+}
+
+/**
+ * Re-index the owner's persisted documents into the in-memory vector store
+ * (boot-time recovery). Vectors are rebuilt with the HashEmbedder, so this
+ * works on plain PostgreSQL without the pgvector extension.
+ */
+export async function loadRagDocuments(
+  state: RagState,
+  pool: Pool,
+  userId: string,
+): Promise<number> {
+  state.pool = pool;
+  state.workspaceId = userId;
+  const { rows } = await pool.query(
+    `SELECT id, title, content, metadata FROM knowledge_documents
+     WHERE user_id = $1 ORDER BY created_at ASC`,
+    [userId],
+  );
+  let loaded = 0;
+  for (const row of rows as Record<string, unknown>[]) {
+    await addRagDocument(
+      state,
+      {
+        id: String(row['id']),
+        title: String(row['title']),
+        content: String(row['content'] ?? ''),
+        metadata:
+          row['metadata'] && typeof row['metadata'] === 'object'
+            ? (row['metadata'] as Record<string, unknown>)
+            : {},
+      },
+      { persist: false },
+    );
+    loaded += 1;
+  }
+  return loaded;
 }
 
 function queryTokens(query: string): string[] {
@@ -254,14 +318,18 @@ export function registerRagRoutes(app: FastifyInstance, deps: RagRouteDeps): voi
         await reply.code(400).send({ error: 'title and content are required' });
         return;
       }
-      const doc = await addRagDocument(rag, {
-        title: body.title,
-        content: body.content,
-        metadata:
-          body.metadata && typeof body.metadata === 'object'
-            ? (body.metadata as Record<string, unknown>)
-            : {},
-      });
+      const doc = await addRagDocument(
+        rag,
+        {
+          title: body.title,
+          content: body.content,
+          metadata:
+            body.metadata && typeof body.metadata === 'object'
+              ? (body.metadata as Record<string, unknown>)
+              : {},
+        },
+        { userId: (req.authUser as { id: string }).id },
+      );
       return { id: doc.id, title: doc.title };
     },
   );

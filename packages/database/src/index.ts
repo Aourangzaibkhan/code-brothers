@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 
 export { runMigrations, listApplied } from './migrate.js';
 export type { RunMigrationsOptions, ListAppliedOptions } from './migrate.js';
+export type { Pool, PoolClient } from 'pg';
 
 /** Create a `pg` connection pool from a PostgreSQL connection string. */
 export function createPool(connectionString: string): Pool {

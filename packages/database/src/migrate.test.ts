@@ -34,6 +34,7 @@ const BASE_MIGRATIONS = [
   '0012_security.sql',
   '0013_polling_state.sql',
   '0014_products.sql',
+  '0015_credentials_wrap_tag.sql',
 ];
 
 /** Every table from spec §9, plus the replay-nonce cache and the bookkeeping table. */

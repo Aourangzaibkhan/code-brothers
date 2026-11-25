@@ -66,6 +66,7 @@ import {
 } from './modules/index.js';
 import {
   createRagState,
+  loadRagDocuments,
   registerRagRoutes,
   type RagState,
 } from './modules/rag.js';
@@ -98,6 +99,12 @@ export interface ApiOptions {
   ops?: OpsState;
   /** Pre-built RAG state (defaults to fresh, in-memory). */
   rag?: RagState;
+  /**
+   * Pg pool for RAG document persistence (DATABASE_URL set). Documents are
+   * written to knowledge_documents on add and re-indexed at boot; without
+   * it the RAG state is purely in-memory.
+   */
+  ragPool?: import('@code-brothers/database').Pool;
   /** Injectable courier HTTP transport (tests pass a mock fetch). */
   courierFetch?: typeof fetch;
   /** Fallback courier credentials when a request carries none. */
@@ -189,6 +196,19 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
   const stores = options.stores ?? createMemoryStores();
   const ops = options.ops ?? createOpsState();
   const rag = options.rag ?? createRagState();
+  if (options.ragPool) {
+    // Persisted RAG documents: re-index the owner's rows at boot (the
+    // owner may not exist yet on a first boot — then there is nothing to
+    // load, and documents added later in this boot are written live).
+    rag.pool = options.ragPool;
+    const owner = await stores.users.findOwner();
+    if (owner) {
+      const loaded = await loadRagDocuments(rag, options.ragPool, owner.id);
+      if (loaded > 0) {
+        console.info(`RAG: re-indexed ${loaded} persisted document(s) for the owner`);
+      }
+    }
+  }
   const throttle = options.throttle ?? new LoginThrottle();
   const setupTokenService = options.setupTokenService ?? new SetupTokenService();
   const sessionTtlMs = options.sessionTtlMs ?? 24 * 60 * 60 * 1000;
@@ -1092,7 +1112,7 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
         return reply.code(401).send({ error: 'invalid_signature' });
       }
 
-      if (!stores.nonces.checkAndAdd(`${hook.id}:${nonce}`, nonceTtlMs)) {
+      if (!(await stores.nonces.checkAndAdd(`${hook.id}:${nonce}`, nonceTtlMs))) {
         await audit(req, {
           eventType: 'webhook_replay_rejected',
           severity: 'warning',

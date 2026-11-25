@@ -198,7 +198,7 @@ export interface AuditLog {
 /** Replay-nonce cache for the webhook gateway (spec §9 webhook_replay_nonces). */
 export interface NonceCache {
   /** Returns true when the key is fresh (and records it); false on replay. */
-  checkAndAdd(key: string, ttlMs: number): boolean;
+  checkAndAdd(key: string, ttlMs: number): Promise<boolean>;
 }
 
 /** Process-wide kill-switch state (spec §8: "Freeze Platform"). */
@@ -466,7 +466,7 @@ export class MemoryNonceCache implements NonceCache {
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  checkAndAdd(key: string, ttlMs: number): boolean {
+  async checkAndAdd(key: string, ttlMs: number): Promise<boolean> {
     const t = this.now();
     const expiresAt = this.seen.get(key);
     if (expiresAt !== undefined && expiresAt > t) return false;
