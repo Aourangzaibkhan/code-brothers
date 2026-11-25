@@ -44,7 +44,7 @@
       "type": "local.dbQuery",
       "name": "Deduct Local Stock",
       "parameters": {
-        "sql": "UPDATE products SET stock = stock - ? WHERE master_sku = ?",
+        "sql": "UPDATE products SET stock = stock - $1 WHERE master_sku = $2",
         "valuesJson": "[\"{{ $json.quantity }}\", \"{{ $json.masterSku }}\"]"
       }
     },

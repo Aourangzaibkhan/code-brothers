@@ -1,4 +1,11 @@
-import { defineNode, type NodeContext, type NodeDefinition, type NodeRegistry } from '@code-brothers/node-sdk';
+import {
+  defineNode,
+  renderStringParam,
+  type NodeContext,
+  type NodeDefinition,
+  type NodeItem,
+  type NodeRegistry,
+} from '@code-brothers/node-sdk';
 import { StaticAccessTokenProvider, YouTubeDataClient } from './youtube-client.js';
 
 const CREDENTIALS = [
@@ -6,7 +13,7 @@ const CREDENTIALS = [
     name: 'youtubeOAuth',
     displayName: 'YouTube OAuth',
     required: true,
-    fields: ['accessToken'],
+    fields: ['accessToken', 'baseUrl'],
   },
 ];
 
@@ -24,13 +31,18 @@ async function getClient(ctx: NodeContext): Promise<YouTubeDataClient> {
   if (!accessToken) throw new Error('Missing youtubeOAuth credentials (accessToken)');
   return new YouTubeDataClient({
     tokenProvider: new StaticAccessTokenProvider(accessToken),
+    // Optional override (sandbox / local mock) — omit for the real API.
+    baseUrl: typeof creds?.baseUrl === 'string' && creds.baseUrl !== '' ? creds.baseUrl : undefined,
     fetch: ((url: string | URL, init?: RequestInit) => ctx.fetch(url, init)) as typeof fetch,
   });
 }
 
-function strParam(ctx: NodeContext, name: string): string {
-  const value = ctx.parameters[name];
-  return typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value);
+function strParam(
+  ctx: NodeContext,
+  name: string,
+  itemJson: Record<string, unknown>,
+): string {
+  return renderStringParam(ctx, name, itemJson);
 }
 
 export const youtubeUploadVideo: NodeDefinition = defineNode({
@@ -73,27 +85,32 @@ export const youtubeUploadVideo: NodeDefinition = defineNode({
   ],
   credentials: CREDENTIALS,
   permissions: PERMISSIONS,
-  async execute(ctx) {
+  async execute(ctx, input) {
     const client = await getClient(ctx);
-    const contentBase64 = strParam(ctx, 'contentBase64');
-    if (!contentBase64) throw new Error('youtube.uploadVideo requires the contentBase64 parameter');
-    const bytes = new Uint8Array(Buffer.from(contentBase64, 'base64'));
-    const tagsRaw = strParam(ctx, 'tags');
-    const tags = tagsRaw
-      ? tagsRaw.split(',').map((t) => t.trim()).filter(Boolean)
-      : undefined;
-    const categoryId = strParam(ctx, 'categoryId');
-    const video = await client.uploadVideo({
-      title: strParam(ctx, 'title'),
-      description: strParam(ctx, 'description') || undefined,
-      privacyStatus: strParam(ctx, 'privacyStatus') || 'private',
-      tags,
-      ...(categoryId ? { categoryId } : {}),
-      contentType: strParam(ctx, 'contentType') || 'video/mp4',
-      bytes,
-    });
-    ctx.logger.info('Uploaded YouTube video', { id: String(video.id ?? '') });
-    return [[{ json: { ...video } }]];
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
+    const out: NodeItem[] = [];
+    for (const item of items) {
+      const contentBase64 = strParam(ctx, 'contentBase64', item.json);
+      if (!contentBase64) throw new Error('youtube.uploadVideo requires the contentBase64 parameter');
+      const bytes = new Uint8Array(Buffer.from(contentBase64, 'base64'));
+      const tagsRaw = strParam(ctx, 'tags', item.json);
+      const tags = tagsRaw
+        ? tagsRaw.split(',').map((t) => t.trim()).filter(Boolean)
+        : undefined;
+      const categoryId = strParam(ctx, 'categoryId', item.json);
+      const video = await client.uploadVideo({
+        title: strParam(ctx, 'title', item.json),
+        description: strParam(ctx, 'description', item.json) || undefined,
+        privacyStatus: strParam(ctx, 'privacyStatus', item.json) || 'private',
+        tags,
+        ...(categoryId ? { categoryId } : {}),
+        contentType: strParam(ctx, 'contentType', item.json) || 'video/mp4',
+        bytes,
+      });
+      ctx.logger.info('Uploaded YouTube video', { id: String(video.id ?? '') });
+      out.push({ json: { ...item.json, ...video } });
+    }
+    return [out];
   },
 });
 
@@ -111,10 +128,18 @@ export const youtubeReplyComment: NodeDefinition = defineNode({
   ],
   credentials: CREDENTIALS,
   permissions: PERMISSIONS,
-  async execute(ctx) {
+  async execute(ctx, input) {
     const client = await getClient(ctx);
-    const result = await client.replyToComment(strParam(ctx, 'commentId'), strParam(ctx, 'text'));
-    return [[{ json: { ...result } }]];
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
+    const out: NodeItem[] = [];
+    for (const item of items) {
+      const result = await client.replyToComment(
+        strParam(ctx, 'commentId', item.json),
+        strParam(ctx, 'text', item.json),
+      );
+      out.push({ json: { ...item.json, ...result } });
+    }
+    return [out];
   },
 });
 

@@ -441,7 +441,7 @@ describe('webhook gateway', () => {
         id: 'set',
         type: 'core.setData',
         name: 'Set',
-        parameters: { assignments: [{ name: 'orderId', value: '{{ $json.body.orderId }}' }] },
+        parameters: { assignments: [{ name: 'orderId', value: '{{ $json.orderId }}' }] },
       },
       { id: 'log', type: 'core.log', name: 'Log', parameters: {} },
     ],

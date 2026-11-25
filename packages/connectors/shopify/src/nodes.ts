@@ -1,5 +1,7 @@
 import {
   defineNode,
+  renderParams,
+  renderValue,
   NodeRegistry,
   type NodeContext,
   type NodeDefinition,
@@ -18,6 +20,8 @@ async function clientFromContext(ctx: NodeContext): Promise<ShopifyClient> {
     shop: String(creds.shop),
     accessToken: String(creds.accessToken),
     apiVersion: creds.apiVersion ? String(creds.apiVersion) : undefined,
+    // Optional override (sandbox / local mock) — omit for the real API.
+    baseUrl: creds.baseUrl ? String(creds.baseUrl) : undefined,
     fetch: ctx.fetch as unknown as typeof fetch,
   });
 }
@@ -34,7 +38,7 @@ const credentialRequirement = [
     name: SHOPIFY_CREDENTIAL_SLOT,
     displayName: 'Shopify API',
     required: true,
-    fields: ['shop', 'accessToken'],
+    fields: ['shop', 'accessToken', 'apiVersion', 'baseUrl'],
   },
 ];
 
@@ -66,14 +70,17 @@ export const shopifyGetOrdersNode: NodeDefinition = defineNode({
     network: { hosts: ['*.myshopify.com'] },
     scopes: ['read_orders'],
   },
-  async execute(ctx) {
+  async execute(ctx, input) {
     const client = await clientFromContext(ctx);
-    const params: Record<string, string | number> = {};
-    if (ctx.parameters.status) params.status = String(ctx.parameters.status);
-    if (ctx.parameters.limit !== undefined && ctx.parameters.limit !== null && ctx.parameters.limit !== '') {
-      params.limit = Number(ctx.parameters.limit);
+    // List node: one provider call; parameters rendered against the first
+    // input item so `$vars.*` / `$json.*` from the trigger still resolve.
+    const params = renderParams(ctx, input[0]?.json ?? {});
+    const query: Record<string, string | number> = {};
+    if (params.status) query.status = String(params.status);
+    if (params.limit !== undefined && params.limit !== null && params.limit !== '') {
+      query.limit = Number(params.limit);
     }
-    const orders = await client.getOrders(params);
+    const orders = await client.getOrders(query);
     return [orders.map((o) => ({ json: o as Record<string, unknown> }))];
   },
 });
@@ -102,19 +109,25 @@ export const shopifyCreateDraftOrderNode: NodeDefinition = defineNode({
   },
   async execute(ctx, input) {
     const client = await clientFromContext(ctx);
-    let lineItems: unknown[] = [];
-    const raw = ctx.parameters.lineItemsJson;
-    if (typeof raw === 'string' && raw.trim() !== '') {
-      lineItems = JSON.parse(raw) as unknown[];
-    } else if (Array.isArray(raw)) {
-      lineItems = raw;
-    } else if (input.length > 0) {
-      lineItems = input.map((item: NodeItem) => item.json);
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
+    const out: NodeItem[] = [];
+    for (const item of items) {
+      let lineItems: unknown[] = [];
+      const raw = renderValue(ctx, ctx.parameters.lineItemsJson, item.json);
+      if (typeof raw === 'string' && raw.trim() !== '') {
+        lineItems = JSON.parse(raw) as unknown[];
+      } else if (Array.isArray(raw)) {
+        lineItems = raw;
+      } else {
+        lineItems = [item.json];
+      }
+      const draftOrder: Record<string, unknown> = { line_items: lineItems };
+      const email = renderValue(ctx, ctx.parameters.email, item.json);
+      if (email) draftOrder.email = String(email);
+      const created = await client.createDraftOrder(draftOrder);
+      out.push({ json: { ...item.json, ...(created as Record<string, unknown>) } });
     }
-    const draftOrder: Record<string, unknown> = { line_items: lineItems };
-    if (ctx.parameters.email) draftOrder.email = String(ctx.parameters.email);
-    const created = await client.createDraftOrder(draftOrder);
-    return [[{ json: created as Record<string, unknown> }]];
+    return [out];
   },
 });
 
@@ -136,14 +149,20 @@ export const shopifyUpdateInventoryNode: NodeDefinition = defineNode({
     network: { hosts: ['*.myshopify.com'] },
     scopes: ['write_inventory'],
   },
-  async execute(ctx) {
+  async execute(ctx, input) {
     const client = await clientFromContext(ctx);
-    const level = await client.setInventoryLevel({
-      locationId: asId(ctx.parameters.locationId),
-      inventoryItemId: asId(ctx.parameters.inventoryItemId),
-      available: Number(ctx.parameters.available),
-    });
-    return [[{ json: level as Record<string, unknown> }]];
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
+    const out: NodeItem[] = [];
+    for (const item of items) {
+      const params = renderParams(ctx, item.json);
+      const level = await client.setInventoryLevel({
+        locationId: asId(params.locationId),
+        inventoryItemId: asId(params.inventoryItemId),
+        available: Number(params.available),
+      });
+      out.push({ json: { ...item.json, ...(level as Record<string, unknown>) } });
+    }
+    return [out];
   },
 });
 

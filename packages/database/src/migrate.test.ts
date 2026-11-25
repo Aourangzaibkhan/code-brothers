@@ -33,6 +33,7 @@ const BASE_MIGRATIONS = [
   '0011_customers_payments.sql',
   '0012_security.sql',
   '0013_polling_state.sql',
+  '0014_products.sql',
 ];
 
 /** Every table from spec §9, plus the replay-nonce cache and the bookkeeping table. */
@@ -57,6 +58,7 @@ const EXPECTED_TABLES = [
   'security_audit_logs',
   'ip_bans',
   'polling_state',
+  'products',
   'schema_migrations',
 ];
 

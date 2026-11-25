@@ -29,7 +29,7 @@ const CORE_TYPES = [
   // packages/core/src/nodes/
   'core.manualTrigger', 'core.webhookTrigger', 'core.cronTrigger',
   'core.httpRequest', 'core.if', 'core.switch', 'core.loop', 'core.wait',
-  'core.setData', 'core.log', 'core.noop',
+  'core.setData', 'core.aggregate', 'core.log', 'core.noop',
   // packages/connectors/core-nodes/
   'core.emailSend', 'core.pdfGenerate', 'core.googleSheetsAppend',
   'core.csvTransform',
@@ -37,7 +37,7 @@ const CORE_TYPES = [
 
 const CONNECTOR_TYPES = [
   // whatsapp
-  'whatsapp.sendMessage', 'whatsapp.sendTemplate',
+  'whatsapp.sendMessage', 'whatsapp.sendTemplate', 'whatsapp.downloadMedia',
   // instagram
   'instagram.publishPost', 'instagram.replyComment', 'instagram.sendDm',
   // youtube

@@ -17,7 +17,7 @@
       "type": "local.dbQuery",
       "name": "Lookup COD Risk Score",
       "parameters": {
-        "sql": "SELECT risk_score FROM customers_crm WHERE phone = ?",
+        "sql": "SELECT cod_risk_score FROM customers_crm WHERE phone = $1",
         "valuesJson": "[\"{{ $json.customerPhone }}\"]"
       }
     },
@@ -26,7 +26,7 @@
       "type": "core.if",
       "name": "High Risk?",
       "parameters": {
-        "left": "{{ $json.risk_score }}",
+        "left": "{{ $json.cod_risk_score }}",
         "operator": "gt",
         "right": 70
       }

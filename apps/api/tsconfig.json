@@ -28,6 +28,12 @@
     },
     {
       "path": "../../packages/connectors/ecommerce-local"
+    },
+    {
+      "path": "../../packages/connector-registry"
+    },
+    {
+      "path": "../../packages/rag-engine"
     }
   ]
 }

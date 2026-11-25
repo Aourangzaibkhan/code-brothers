@@ -51,6 +51,9 @@
     },
     {
       "path": "apps/worker"
+    },
+    {
+      "path": "packages/connector-registry"
     }
   ]
 }

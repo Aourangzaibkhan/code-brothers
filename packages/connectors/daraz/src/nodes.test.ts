@@ -71,3 +71,20 @@ test('nodes throw when credentials are missing', async () => {
   const { ctx } = createTestNodeContext({ parameters: {}, credentials: {} });
   await assert.rejects(() => darazGetOrdersNode.execute(ctx, []), /darazApi/);
 });
+
+test('daraz.updateStock renders {{ }} params per item, one output per input', async () => {
+  const { calls, fetchImpl } = stubFetch(() => jsonResponse({ code: '0', data: { success: true } }));
+  const { ctx } = createTestNodeContext({
+    parameters: { sellerSku: '{{ $json.sellerSku }}', quantity: '{{ $json.remainingStock }}' },
+    credentials,
+    fetchImpl,
+  });
+  const out = await darazUpdateStockNode.execute(ctx, [
+    { json: { sellerSku: 'SKU-1', remainingStock: 4 } },
+    { json: { sellerSku: 'SKU-2', remainingStock: 9 } },
+  ]);
+  assert.equal(out[0]!.length, 2);
+  assert.equal(calls.length, 2);
+  assert.equal((out[0]![0]!.json as Record<string, unknown>).sellerSku, 'SKU-1');
+  assert.equal((out[0]![1]!.json as Record<string, unknown>).quantity, 9);
+});

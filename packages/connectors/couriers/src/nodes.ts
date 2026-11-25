@@ -1,7 +1,10 @@
 import {
   defineNode,
+  renderParams,
+  renderStringParam,
   NodeRegistry,
   type NodeDefinition,
+  type NodeItem,
 } from '@code-brothers/node-sdk';
 import { CourierClient, type CourierCredentials } from './client.js';
 import { COURIER_PRESETS, type BookingRequest, type Party } from './presets.js';
@@ -20,8 +23,9 @@ const PRESET_OPTIONS = COURIER_PRESETS.map((p) => ({
 
 async function buildClient(
   ctx: Parameters<NodeDefinition['execute']>[0],
+  itemJson: Record<string, unknown> = {},
 ): Promise<CourierClient> {
-  const presetId = ctx.parameters.preset;
+  const presetId = renderStringParam(ctx, 'preset', itemJson);
   if (typeof presetId !== 'string' || presetId === '') {
     throw new Error('Courier node requires a "preset" parameter');
   }
@@ -49,10 +53,11 @@ function partyFromParams(
   ctx: Parameters<NodeDefinition['execute']>[0],
   prefix: 'sender' | 'receiver',
   defaults: Party,
+  itemJson: Record<string, unknown> = {},
 ): Party {
   const pick = (suffix: string, fallback: string): string => {
-    const value = ctx.parameters[`${prefix}${suffix}`];
-    return typeof value === 'string' && value !== '' ? value : fallback;
+    const value = renderStringParam(ctx, `${prefix}${suffix}`, itemJson);
+    return value !== '' ? value : fallback;
   };
   return {
     name: pick('Name', defaults.name),
@@ -115,52 +120,55 @@ export const courierBookShipmentNode = defineNode({
     scopes: ['shipments:book'],
     filesystem: 'none',
   },
-  async execute(ctx) {
-    const client = await buildClient(ctx);
-    const sender = partyFromParams(ctx, 'sender', DEFAULT_SENDER);
-    const receiver = partyFromParams(ctx, 'receiver', {
-      name: '',
-      phone: '',
-      address: '',
-      city: '',
-      country: '',
-    });
-    if (!receiver.name || !receiver.address) {
-      throw new Error(
-        'Courier Book Shipment node requires receiverName / receiverAddress parameters',
-      );
-    }
-    const req: BookingRequest = {
-      sender,
-      receiver,
-      weightKg: typeof ctx.parameters.weightKg === 'number' ? ctx.parameters.weightKg : 1,
-      pieces: typeof ctx.parameters.pieces === 'number' ? ctx.parameters.pieces : 1,
-      codAmount:
-        typeof ctx.parameters.codAmount === 'number' ? ctx.parameters.codAmount : undefined,
-      currency:
-        typeof ctx.parameters.currency === 'string' ? ctx.parameters.currency : undefined,
-      description:
-        typeof ctx.parameters.description === 'string'
-          ? ctx.parameters.description
-          : undefined,
-      serviceType:
-        typeof ctx.parameters.serviceType === 'string'
-          ? ctx.parameters.serviceType
-          : undefined,
-    };
-    const result = await client.bookShipment(req);
-    return [
-      [
-        {
-          json: {
-            awb: result.awb,
-            labelUrl: result.labelUrl ?? null,
-            preset: client.preset.id,
-            raw: result.raw as Record<string, unknown>,
-          },
+  async execute(ctx, input) {
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
+    const out: NodeItem[] = [];
+    for (const item of items) {
+      const client = await buildClient(ctx, item.json);
+      const sender = partyFromParams(ctx, 'sender', DEFAULT_SENDER, item.json);
+      const receiver = partyFromParams(ctx, 'receiver', {
+        name: '',
+        phone: '',
+        address: '',
+        city: '',
+        country: '',
+      }, item.json);
+      if (!receiver.name || !receiver.address) {
+        throw new Error(
+          'Courier Book Shipment node requires receiverName / receiverAddress parameters',
+        );
+      }
+      const params = renderParams(ctx, item.json);
+      const req: BookingRequest = {
+        sender,
+        receiver,
+        weightKg: typeof params.weightKg === 'number' ? params.weightKg : 1,
+        pieces: typeof params.pieces === 'number' ? params.pieces : 1,
+        codAmount:
+          typeof params.codAmount === 'number' ? params.codAmount : undefined,
+        currency:
+          typeof params.currency === 'string' ? params.currency : undefined,
+        description:
+          typeof params.description === 'string'
+            ? params.description
+            : undefined,
+        serviceType:
+          typeof params.serviceType === 'string'
+            ? params.serviceType
+            : undefined,
+      };
+      const result = await client.bookShipment(req);
+      out.push({
+        json: {
+          ...item.json,
+          awb: result.awb,
+          labelUrl: result.labelUrl ?? null,
+          preset: client.preset.id,
+          raw: result.raw as Record<string, unknown>,
         },
-      ],
-    ];
+      });
+    }
+    return [out];
   },
 });
 
@@ -193,26 +201,28 @@ export const courierTrackNode = defineNode({
     scopes: ['shipments:track'],
     filesystem: 'none',
   },
-  async execute(ctx) {
-    const awb = ctx.parameters.awb;
-    if (typeof awb !== 'string' || awb === '') {
-      throw new Error('Courier Track node requires an "awb" parameter');
-    }
-    const client = await buildClient(ctx);
-    const tracking = await client.track(awb);
-    return [
-      [
-        {
-          json: {
-            awb: tracking.awb,
-            status: tracking.status,
-            delivered: tracking.delivered,
-            events: tracking.events as unknown as Record<string, unknown>[],
-            preset: client.preset.id,
-          },
+  async execute(ctx, input) {
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
+    const out: NodeItem[] = [];
+    for (const item of items) {
+      const awb = renderStringParam(ctx, 'awb', item.json);
+      if (awb === '') {
+        throw new Error('Courier Track node requires an "awb" parameter');
+      }
+      const client = await buildClient(ctx, item.json);
+      const tracking = await client.track(awb);
+      out.push({
+        json: {
+          ...item.json,
+          awb: tracking.awb,
+          status: tracking.status,
+          delivered: tracking.delivered,
+          events: tracking.events as unknown as Record<string, unknown>[],
+          preset: client.preset.id,
         },
-      ],
-    ];
+      });
+    }
+    return [out];
   },
 });
 

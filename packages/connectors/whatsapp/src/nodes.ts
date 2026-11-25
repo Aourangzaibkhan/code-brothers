@@ -1,5 +1,6 @@
 import {
   defineNode,
+  renderValue,
   type NodeContext,
   type NodeDefinition,
   type NodeInputData,
@@ -34,14 +35,16 @@ async function buildClient(ctx: NodeContext): Promise<CloudApiClient> {
   });
 }
 
-/** Run `fn` once per input item (or once when there is no input). */
+/** Run `fn` once per input item (or once when there is no input). The result is merged into the item, so upstream fields stay available downstream. */
 async function perItem(
   input: NodeInputData,
   fn: (itemJson: Record<string, unknown>) => Promise<Record<string, unknown>>,
 ): Promise<NodeOutputData> {
   const items = input.length > 0 ? input : [{ json: {} }];
   const out = [];
-  for (const item of items) out.push({ json: await fn(item.json) });
+  for (const item of items) {
+    out.push({ json: { ...item.json, ...(await fn(item.json)) } });
+  }
   return [out];
 }
 
@@ -50,7 +53,13 @@ function param(
   itemJson: Record<string, unknown>,
   name: string,
 ): unknown {
-  return itemJson[name] ?? ctx.parameters[name];
+  // Per-item field wins, but only when it is a plain scalar: an httpRequest
+  // merges its response into the item under `body` (an object), and that
+  // object must never override the message-body parameter — it rendered as
+  // the literal string "[object Object]" and was sent to WhatsApp.
+  const perItem = itemJson[name];
+  if (typeof perItem === 'string' || typeof perItem === 'number') return perItem;
+  return renderValue(ctx, ctx.parameters[name], itemJson);
 }
 
 export const whatsappSendMessageNode: NodeDefinition = defineNode({
@@ -148,9 +157,52 @@ export const whatsappSendTemplateNode: NodeDefinition = defineNode({
   },
 });
 
+export const whatsappDownloadMediaNode: NodeDefinition = defineNode({
+  type: 'whatsapp.downloadMedia',
+  displayName: 'WhatsApp: Resolve Media URL',
+  description:
+    'Resolves a WhatsApp media id to its pre-signed download URL (the media worker fetches it directly). Per-item "mediaId" overrides the node parameter.',
+  version: 1,
+  category: 'Messaging',
+  inputs: { type: 'object' },
+  outputs: {
+    type: 'object',
+    properties: {
+      mediaId: { type: 'string' },
+      mediaUrl: { type: 'string' },
+      mimeType: { type: 'string' },
+      fileSize: { type: 'number' },
+    },
+  },
+  parameters: [
+    { name: 'mediaId', displayName: 'Media ID', type: 'string', required: true },
+  ],
+  credentials: CREDENTIALS,
+  permissions: {
+    network: { hosts: ['graph.facebook.com'] },
+    scopes: ['whatsapp_business_messaging'],
+  },
+  async execute(ctx, input) {
+    const client = await buildClient(ctx);
+    return perItem(input, async (itemJson) => {
+      const mediaId = String(param(ctx, itemJson, 'mediaId') ?? '');
+      if (!mediaId) throw new Error('WhatsApp media resolve requires a "mediaId"');
+      const media = await client.getMediaUrl(mediaId);
+      if (!media.url) throw new Error(`WhatsApp returned no URL for media ${mediaId}`);
+      return {
+        mediaId,
+        mediaUrl: media.url,
+        mimeType: media.mimeType ?? '',
+        fileSize: media.fileSize ?? 0,
+      };
+    });
+  },
+});
+
 export const whatsappNodes: NodeDefinition[] = [
   whatsappSendMessageNode,
   whatsappSendTemplateNode,
+  whatsappDownloadMediaNode,
 ];
 
 export function registerWhatsAppNodes(registry: NodeRegistry): NodeRegistry {

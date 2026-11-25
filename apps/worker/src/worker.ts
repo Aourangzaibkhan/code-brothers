@@ -6,14 +6,16 @@
  */
 import {
   InMemoryQueue,
-  createEngine,
+  createSsrfGuard,
+  WorkflowEngine,
   type DeadLetter,
   type EnqueueOptions,
   type EngineOptions,
   type JobQueue,
   type QueueJob,
-  type WorkflowEngine,
+  type WorkflowEngine as WorkflowEngineType,
 } from '@code-brothers/core';
+import { createPlatformRegistry } from '@code-brothers/connector-registry';
 import { redact } from '@code-brothers/security';
 import {
   InMemoryExecutionSink,
@@ -32,9 +34,11 @@ export interface WorkerOptions {
   /** Job queue backend. Default: InMemoryQueue. */
   queue?: JobQueue<WorkflowRunJobData>;
   /** Pre-built engine (overrides engineOptions). */
-  engine?: WorkflowEngine;
+  engine?: WorkflowEngineType;
   /** Engine options used when no engine is supplied. */
   engineOptions?: EngineOptions;
+  /** Internal hosts the SSRF guard allows (default: platform services). */
+  internalHosts?: string[];
   /** Kill-switch probe: when it returns true, run jobs are refused. */
   isHalted?: () => boolean;
   /** Injectable sleep for the default in-memory queue (tests). */
@@ -45,7 +49,7 @@ export class WorkflowWorker {
   readonly queue: JobQueue<WorkflowRunJobData>;
   readonly executions: ExecutionSink;
   private readonly workflows: WorkflowProvider;
-  private readonly engine: WorkflowEngine;
+  private readonly engine: WorkflowEngineType;
   private readonly isHalted?: () => boolean;
 
   constructor(options: WorkerOptions) {
@@ -53,9 +57,20 @@ export class WorkflowWorker {
     this.executions = options.executions ?? new InMemoryExecutionSink();
     this.queue =
       options.queue ?? new InMemoryQueue<WorkflowRunJobData>({ sleep: options.queueSleep });
+    // Same platform registry as the API: every shipped node type resolves,
+    // and the same internal-hosts SSRF allowlist applies.
+    const internalHosts =
+      options.internalHosts ??
+      (process.env.CB_INTERNAL_HOSTS
+        ? process.env.CB_INTERNAL_HOSTS.split(',').map((h) => h.trim()).filter(Boolean)
+        : ['localhost', 'ai-media-worker', 'host.docker.internal']);
     this.engine =
       options.engine ??
-      createEngine({ redactor: (value) => redact(value), ...options.engineOptions });
+      new WorkflowEngine(createPlatformRegistry(), {
+        redactor: (value) => redact(value),
+        ssrfGuard: createSsrfGuard({ allowedHosts: internalHosts }),
+        ...options.engineOptions,
+      });
     this.isHalted = options.isHalted;
   }
 

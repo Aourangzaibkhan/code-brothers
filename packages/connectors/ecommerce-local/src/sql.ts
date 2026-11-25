@@ -12,7 +12,7 @@ export interface Queryable {
   query(
     text: string,
     values?: unknown[],
-  ): Promise<{ rows: unknown[] }>;
+  ): Promise<{ rows: unknown[]; rowCount?: number }>;
 }
 
 export interface SqlStoreConnectorOptions {
@@ -136,12 +136,23 @@ export class SqlStoreConnector {
   }
 
   /** Pass-through query: `text` with `$n` placeholders + bound `values`. */
-  async query(text: string, values: unknown[] = []): Promise<{ rows: unknown[] }> {
+  async query(
+    text: string,
+    values: unknown[] = [],
+  ): Promise<{ rows: unknown[]; rowCount: number }> {
     if (this.queryable) {
-      return this.queryable.query(text, values);
+      const result = await this.queryable.query(text, values);
+      return {
+        rows: result.rows,
+        rowCount:
+          typeof result.rowCount === 'number' ? result.rowCount : result.rows.length,
+      };
     }
     const result = await this.getPool().query(text, values as never[]);
-    return { rows: result.rows as unknown[] };
+    return {
+      rows: result.rows as unknown[],
+      rowCount: result.rowCount ?? (result.rows as unknown[]).length,
+    };
   }
 
   async select(

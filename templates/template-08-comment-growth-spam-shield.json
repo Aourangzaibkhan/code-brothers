@@ -1,7 +1,7 @@
 {
   "id": "template-08-comment-growth-spam-shield",
   "name": "AI Comment Growth & Spam Shield",
-  "description": "Spec Section 10 #8. Every 15 minutes: fetch new YouTube comments -> AI classification (spam / lead / question) -> spam is hidden, leads get a reply with the purchase link, questions get a natural AI answer in the viewer language.",
+  "description": "Spec Section 10 #8. Every 15 minutes: fetch new YouTube comments -> AI classification (spam / lead / question) -> spam is hidden, leads get a reply with the purchase link, questions get a natural AI answer in the viewer language. Classification is keyword-based (links = spam, price/order/buy = lead, otherwise question); the question reply is a canned holding reply \u2014 wire the /api/ai/chat endpoint for real AI answers.",
   "nodes": [
     {
       "id": "trigger",
@@ -17,7 +17,7 @@
       "name": "Fetch YouTube Comments",
       "parameters": {
         "method": "GET",
-        "url": "https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId={{ $vars.monitoredVideoId }}&maxResults=50",
+        "url": "{{ $vars.youtubeApiBaseUrl }}/youtube/v3/commentThreads?part=snippet&videoId={{ $vars.monitoredVideoId }}&maxResults=50",
         "responseType": "json"
       }
     },
@@ -54,7 +54,7 @@
       "name": "Hide Spam Comment",
       "parameters": {
         "method": "POST",
-        "url": "https://www.googleapis.com/youtube/v3/comments/setModerationStatus",
+        "url": "{{ $vars.youtubeApiBaseUrl }}/youtube/v3/comments/setModerationStatus",
         "body": {
           "id": "{{ $json.commentId }}",
           "moderationStatus": "rejected"
@@ -77,7 +77,41 @@
       "name": "Reply to Question",
       "parameters": {
         "commentId": "{{ $json.commentId }}",
-        "text": "{{ $json.aiAnswer }}"
+        "text": "Thanks for watching! We will get back to you with an answer shortly."
+      }
+    },
+    {
+      "id": "unwrap",
+      "type": "core.setData",
+      "name": "Unwrap Comment List",
+      "parameters": {
+        "assignments": [
+          {
+            "name": "items",
+            "value": "{{ $json.body.items }}"
+          }
+        ]
+      }
+    },
+    {
+      "id": "classify-comment",
+      "type": "core.setData",
+      "name": "Classify Comment",
+      "parameters": {
+        "assignments": [
+          {
+            "name": "commentId",
+            "value": "{{ $json.snippet.topLevelComment.id }}"
+          },
+          {
+            "name": "commentText",
+            "value": "{{ $json.snippet.topLevelComment.snippet.textDisplay }}"
+          },
+          {
+            "name": "classification",
+            "value": "{{ (($json.snippet.topLevelComment.snippet.textDisplay || '').toLowerCase().includes('http') || ($json.snippet.topLevelComment.snippet.textDisplay || '').toLowerCase().includes('www.')) ? 'spam' : ((($json.snippet.topLevelComment.snippet.textDisplay || '').toLowerCase().includes('price') || ($json.snippet.topLevelComment.snippet.textDisplay || '').toLowerCase().includes('order') || ($json.snippet.topLevelComment.snippet.textDisplay || '').toLowerCase().includes('buy')) ? 'lead' : 'question') }}"
+          }
+        ]
       }
     }
   ],
@@ -85,14 +119,6 @@
     {
       "from": "trigger",
       "to": "fetch"
-    },
-    {
-      "from": "fetch",
-      "to": "loop"
-    },
-    {
-      "from": "loop",
-      "to": "classify"
     },
     {
       "from": "classify",
@@ -108,13 +134,30 @@
       "from": "classify",
       "output": 2,
       "to": "reply-question"
+    },
+    {
+      "from": "fetch",
+      "to": "unwrap"
+    },
+    {
+      "from": "unwrap",
+      "to": "loop"
+    },
+    {
+      "from": "loop",
+      "to": "classify-comment"
+    },
+    {
+      "from": "classify-comment",
+      "to": "classify"
     }
   ],
   "settings": {
     "timezone": "Asia/Karachi",
     "variables": {
       "monitoredVideoId": "",
-      "productLink": "https://your-store.example/product"
+      "productLink": "https://your-store.example/product",
+      "youtubeApiBaseUrl": "https://www.googleapis.com"
     }
   }
 }

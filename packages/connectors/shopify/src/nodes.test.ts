@@ -85,3 +85,40 @@ test('nodes throw when credentials are missing', async () => {
   const { ctx } = createTestNodeContext({ parameters: {}, credentials: {} });
   await assert.rejects(() => shopifyGetOrdersNode.execute(ctx, []), /shopifyApi/);
 });
+
+test('shopifyUpdateInventory renders {{ }} params per item, one output per input', async () => {
+  const { calls, fetchImpl } = stubFetch(() => jsonResponse({ inventory_level: { available: 5 } }));
+  const { ctx } = createTestNodeContext({
+    parameters: {
+      locationId: '{{ $vars.shopifyLocationId }}',
+      inventoryItemId: '{{ $json.inventoryItemId }}',
+      available: '{{ $json.remainingStock }}',
+    },
+    variables: { shopifyLocationId: 101 },
+    credentials,
+    fetchImpl,
+  });
+  const out = await shopifyUpdateInventoryNode.execute(ctx, [
+    { json: { inventoryItemId: 201, remainingStock: 5 } },
+    { json: { inventoryItemId: 202, remainingStock: 3 } },
+  ]);
+  assert.equal(out[0]!.length, 2);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(JSON.parse(String(calls[0].init?.body)), { location_id: 101, inventory_item_id: 201, available: 5 });
+  assert.deepEqual(JSON.parse(String(calls[1].init?.body)), { location_id: 101, inventory_item_id: 202, available: 3 });
+});
+
+test('shopifyCreateDraftOrder renders a {{ }} lineItemsJson template', async () => {
+  const { calls, fetchImpl } = stubFetch(() => jsonResponse({ draft_order: { id: 44 } }));
+  const { ctx } = createTestNodeContext({
+    parameters: { lineItemsJson: '{{ $json.lineItemsJson }}' },
+    credentials,
+    fetchImpl,
+  });
+  const out = await shopifyCreateDraftOrderNode.execute(ctx, [
+    { json: { lineItemsJson: '[{"variant_id":9,"quantity":1}]' } },
+  ]);
+  assert.equal((out[0][0].json as Record<string, unknown>).id, 44);
+  const sent = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
+  assert.deepEqual(sent, { draft_order: { line_items: [{ variant_id: 9, quantity: 1 }] } });
+});

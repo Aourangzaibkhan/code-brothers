@@ -1,3 +1,4 @@
+import { evaluateExpression, renderTemplate } from './expression.js';
 import { MemoryNodeLogger } from './logger.js';
 import type { NodeContext } from './types.js';
 
@@ -25,9 +26,10 @@ export interface TestNodeContext {
 
 /**
  * Build a NodeContext for unit-testing nodes without the engine. Expression
- * evaluation is engine territory (it lives in @code-brothers/core), so by
- * default the expression methods throw a clear error unless the caller
- * injects an implementation.
+ * evaluation lives in this package (./expression.js), so the test context
+ * renders templates for real — a node under test behaves exactly as it
+ * does under the engine. Callers may still inject their own
+ * evaluateExpression/renderTemplate implementations.
  */
 export function createTestNodeContext(
   options: TestNodeContextOptions = {},
@@ -50,18 +52,22 @@ export function createTestNodeContext(
     fetch: options.fetchImpl ?? globalThis.fetch,
     evaluateExpression:
       options.evaluateExpression ??
-      (() => {
-        throw new Error(
-          'evaluateExpression is not configured in this test context — inject one from @code-brothers/core',
-        );
-      }),
+      ((source, itemJson) =>
+        evaluateExpression(source, {
+          $json: itemJson ?? {},
+          $vars: options.variables ?? {},
+          $workflow: { id: options.workflowId ?? 'test-workflow' },
+          $execution: { id: options.executionId ?? 'test-execution' },
+        })),
     renderTemplate:
       options.renderTemplate ??
-      (() => {
-        throw new Error(
-          'renderTemplate is not configured in this test context — inject one from @code-brothers/core',
-        );
-      }),
+      ((template, itemJson) =>
+        renderTemplate(template, {
+          $json: itemJson ?? {},
+          $vars: options.variables ?? {},
+          $workflow: { id: options.workflowId ?? 'test-workflow' },
+          $execution: { id: options.executionId ?? 'test-execution' },
+        })),
     sleep:
       options.sleep ??
       (async (ms: number) => {

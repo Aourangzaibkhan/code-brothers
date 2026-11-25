@@ -31,10 +31,24 @@ describe('createTestNodeContext', () => {
     assert.deepEqual(sleeps, [25, 50]);
   });
 
-  it('expression methods throw a clear error when not injected', () => {
-    const { ctx } = createTestNodeContext();
-    assert.throws(() => ctx.evaluateExpression('$json.x'), /not configured/);
-    assert.throws(() => ctx.renderTemplate('{{ $json.x }}'), /not configured/);
+  it('expression methods render for real by default (same engine as the runtime)', () => {
+    const { ctx } = createTestNodeContext({
+      variables: { shop: 'acme' },
+    });
+    assert.equal(ctx.evaluateExpression('$json.x + 1', { x: 41 }), 42);
+    assert.equal(
+      ctx.renderTemplate('Hello {{ $json.name }} from {{ $vars.shop }}', {
+        name: 'Ada',
+      }),
+      'Hello Ada from acme',
+    );
+  });
+
+  it('injected expression methods still override the default', () => {
+    const { ctx } = createTestNodeContext({
+      renderTemplate: () => 'injected',
+    });
+    assert.equal(ctx.renderTemplate('{{ $json.x }}'), 'injected');
   });
 
   it('logger records entries in memory', () => {

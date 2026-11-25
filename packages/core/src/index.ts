@@ -2,7 +2,14 @@ import { WorkflowEngine, type EngineOptions } from './engine.js';
 import { createCoreNodeRegistry } from './nodes/index.js';
 
 export * from './types.js';
-export * from './expression.js';
+export {
+  evaluateExpression,
+  renderTemplate,
+  renderDeep,
+  ExpressionError,
+  type ExpressionData,
+  type ExpressionOptions,
+} from '@code-brothers/node-sdk';
 export * from './cron.js';
 export * from './ssrf.js';
 export * from './queue.js';

@@ -1,7 +1,7 @@
 {
   "id": "template-01-whatsapp-sales-assistant",
   "name": "Multilingual WhatsApp AI Sales Assistant (Voice + Text)",
-  "description": "Spec Section 10 #1. Incoming WhatsApp text or voice note -> Whisper transcription (AI media worker) -> RAG catalog search -> stock check -> answer in the customer language, collect address and create a Shopify draft order. Voice branch and text branch merge at \"Normalize Question\".",
+  "description": "Spec Section 10 #1. Incoming WhatsApp text or voice note -> Whisper transcription (AI media worker) -> RAG catalog search -> stock check -> answer in the customer language, collect address and create a Shopify draft order. Voice branch and text branch merge at \"Normalize Question\". Text branch is the verified path; the voice branch resolves the voice note to a media URL first (whatsapp.downloadMedia) and the worker transcribes it.",
   "nodes": [
     {
       "id": "trigger",
@@ -34,9 +34,9 @@
       "name": "Transcribe Voice Note",
       "parameters": {
         "method": "POST",
-        "url": "http://ai-media-worker:8000/transcribe",
+        "url": "{{ $vars.mediaWorkerBaseUrl }}/transcribe",
         "body": {
-          "mediaId": "{{ $json.mediaId }}",
+          "mediaUrl": "{{ $json.mediaUrl }}",
           "language": "{{ $json.language }}"
         },
         "responseType": "json"
@@ -50,7 +50,7 @@
         "assignments": [
           {
             "name": "question",
-            "value": "{{ $json.text }}"
+            "value": "{{ ($node[\"Transcribe Voice Note\"] && $node[\"Transcribe Voice Note\"].json.body.text) || $json.text }}"
           },
           {
             "name": "customerPhone",
@@ -69,7 +69,7 @@
       "name": "Search Catalog (RAG)",
       "parameters": {
         "method": "POST",
-        "url": "http://localhost:3000/api/rag/search",
+        "url": "{{ $vars.apiBaseUrl }}/api/rag/search",
         "body": {
           "query": "{{ $json.question }}",
           "limit": 3
@@ -82,7 +82,7 @@
       "type": "core.if",
       "name": "In Stock?",
       "parameters": {
-        "left": "{{ $json.results[0].stock }}",
+        "left": "{{ $json.body.results[0].stock }}",
         "operator": "gt",
         "right": 0
       }
@@ -93,7 +93,7 @@
       "name": "Send Answer + Price",
       "parameters": {
         "to": "{{ $json.customerPhone }}",
-        "body": "{{ $json.results[0].answer }}\nPrice: {{ $json.results[0].price }}"
+        "body": "{{ $json.body.results[0].answer }}\nPrice: {{ $json.body.results[0].price }}"
       }
     },
     {
@@ -110,7 +110,7 @@
       "type": "shopify.createDraftOrder",
       "name": "Create Draft Order",
       "parameters": {
-        "lineItemsJson": "{{ $json.results[0].lineItemsJson }}"
+        "lineItemsJson": "{{ $json.body.results[0].lineItemsJson }}"
       }
     },
     {
@@ -130,17 +130,20 @@
         "to": "{{ $json.customerPhone }}",
         "body": "Sorry, this item is out of stock right now. We will message you as soon as it is back."
       }
+    },
+    {
+      "id": "download-media",
+      "type": "whatsapp.downloadMedia",
+      "name": "Resolve Voice Note URL",
+      "parameters": {
+        "mediaId": "{{ $json.mediaId }}"
+      }
     }
   ],
   "edges": [
     {
       "from": "trigger",
       "to": "switch-type"
-    },
-    {
-      "from": "switch-type",
-      "output": 0,
-      "to": "transcribe"
     },
     {
       "from": "switch-type",
@@ -180,9 +183,22 @@
     {
       "from": "create-order",
       "to": "confirm-order"
+    },
+    {
+      "from": "switch-type",
+      "output": 0,
+      "to": "download-media"
+    },
+    {
+      "from": "download-media",
+      "to": "transcribe"
     }
   ],
   "settings": {
-    "timezone": "Asia/Karachi"
+    "timezone": "Asia/Karachi",
+    "variables": {
+      "mediaWorkerBaseUrl": "http://ai-media-worker:8000",
+      "apiBaseUrl": "http://localhost:3000"
+    }
   }
 }

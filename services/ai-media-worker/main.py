@@ -5,10 +5,19 @@ must never do in-process:
 
   GET  /health        Liveness + capability report (never fails on missing models)
   POST /transcribe    Speech-to-text for an uploaded audio/video file (Faster-Whisper)
+                      — also accepts JSON {"mediaUrl": ...} or {"filePath": ...}
+                      (paths confined to CB_MEDIA_DIR), so a workflow can call
+                      it with an httpRequest node after resolving a media URL.
   POST /ocr           OCR for an uploaded image (PaddleOCR) — payment screenshots etc.
+                      — also accepts JSON {"mediaUrl": ...} / {"filePath": ...};
+                      the response adds "extracted": {"tid", "amount"} parsed
+                      from the recognised text (JazzCash/Easypaisa receipts).
   POST /tts           Text-to-speech to a WAV file (Piper)
   POST /video/clip    Crop/scale a video to 9:16 1080x1920 with optional burned
-                      SRT captions, via ffmpeg (Media Factory, spec Section 7F)
+                      SRT captions, via ffmpeg (Media Factory, spec Section 7F).
+                      The response includes "contentBase64" (base64 of the clip,
+                      capped at CB_CLIP_BASE64_MAX_MB) so a workflow can upload
+                      it straight to YouTube/Instagram.
 
 Security rules (spec Section 8):
   * ffmpeg is ONLY ever invoked as an argument list with shell=False — no
@@ -24,17 +33,20 @@ Security rules (spec Section 8):
 
 from __future__ import annotations
 
+import base64
 import importlib
 import importlib.util
 import os
+import re
 import shutil
 import subprocess
+import urllib.request
 import uuid
 import wave
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -51,6 +63,8 @@ PIPER_VOICES_DIR = Path(
 ).resolve()
 
 MAX_UPLOAD_BYTES = int(os.environ.get("CB_MAX_UPLOAD_MB", "25")) * 1024 * 1024
+#: Largest clip (bytes) whose base64 is returned by /video/clip.
+CLIP_BASE64_MAX_BYTES = int(os.environ.get("CB_CLIP_BASE64_MAX_MB", "20")) * 1024 * 1024
 WHISPER_MODEL = os.environ.get("CB_WHISPER_MODEL", "small")
 FFMPEG_BIN = os.environ.get("CB_FFMPEG_BIN", "ffmpeg")
 CLIP_TIMEOUT_SECONDS = int(os.environ.get("CB_CLIP_TIMEOUT_SECONDS", "600"))
@@ -171,6 +185,102 @@ async def _save_upload(file: UploadFile, media_kind: str) -> tuple[Path, str]:
     return dest, kind
 
 
+async def _resolve_media_source(request: Request, media_kind: str) -> tuple[Path, str]:
+    """Resolve the media for /transcribe or /ocr from any accepted input.
+
+    Accepts, in order:
+      * multipart form file upload (the original contract),
+      * JSON {"mediaUrl": "..."} — the file is downloaded (size-capped),
+      * JSON {"filePath": "..."} — a path inside CB_MEDIA_DIR.
+    Returns (path, detected_kind). The caller still verifies magic bytes
+    via _save_upload for uploads; downloaded/local files are checked the
+    same way by re-reading their header here.
+    """
+    content_type = request.headers.get("content-type", "")
+    if content_type.startswith("multipart/form-data"):
+        form = await request.form()
+        upload = form.get("file")
+        if not isinstance(upload, UploadFile):
+            raise HTTPException(status_code=422, detail="file upload is required")
+        return await _save_upload(upload, media_kind)
+    if "application/json" in content_type:
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise HTTPException(status_code=422, detail="JSON object expected")
+        media_url = body.get("mediaUrl")
+        file_path = body.get("filePath")
+        if isinstance(media_url, str) and media_url:
+            try:
+                req = urllib.request.Request(media_url, headers={"User-Agent": "code-brothers-media-worker/1.0"})
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    data = resp.read(MAX_UPLOAD_BYTES + 1)
+            except Exception as exc:  # noqa: BLE001 — network failure is a 502
+                raise HTTPException(status_code=502, detail=f"Could not download mediaUrl: {exc}")
+            if len(data) > MAX_UPLOAD_BYTES:
+                raise HTTPException(status_code=413, detail="Downloaded media exceeds the size limit")
+            header = data[:64]
+            kind = (
+                detect_audio_kind(header)
+                if media_kind == "audio"
+                else detect_image_kind(header)
+            )
+            if kind is None:
+                raise HTTPException(status_code=400, detail="Downloaded file is not a supported media format")
+            UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+            dest = UPLOAD_DIR / f"{uuid.uuid4().hex}.{kind}"
+            dest.write_bytes(data)
+            return dest, kind
+        if isinstance(file_path, str) and file_path:
+            path = _resolve_media_path(file_path)
+            if not path.is_file():
+                raise HTTPException(status_code=404, detail="Input file not found")
+            header = path.read_bytes()[:64]
+            kind = (
+                detect_audio_kind(header)
+                if media_kind == "audio"
+                else detect_image_kind(header)
+            )
+            if kind is None:
+                raise HTTPException(status_code=400, detail="File is not a supported media format")
+            return path, kind
+        raise HTTPException(
+            status_code=422,
+            detail="Provide a file upload, mediaUrl, or filePath",
+        )
+    raise HTTPException(
+        status_code=415,
+        detail="Send multipart/form-data with a file, or application/json with mediaUrl/filePath",
+    )
+
+
+def _extract_payment_fields(text: str) -> dict:
+    """Pull a transaction id + amount out of OCR text (JazzCash/Easypaisa).
+
+    Best-effort: returns {"tid": str|None, "amount": float|None}. A workflow
+    that needs certainty should confirm the values with the customer.
+    """
+    tid: Optional[str] = None
+    tid_match = re.search(
+        r"(?:TID|Transaction\s*ID|Txn\s*ID|Trx\s*ID)\s*[:#-]?\s*([A-Za-z0-9]{6,})",
+        text,
+        re.IGNORECASE,
+    )
+    if tid_match:
+        tid = tid_match.group(1)
+    amount: Optional[float] = None
+    amount_match = re.search(
+        r"(?:Rs\.?|PKR|Amount)\s*[:#-]?\s*([0-9][0-9,]*\.?[0-9]{0,2})",
+        text,
+        re.IGNORECASE,
+    )
+    if amount_match:
+        try:
+            amount = float(amount_match.group(1).replace(",", ""))
+        except ValueError:
+            amount = None
+    return {"tid": tid, "amount": amount}
+
+
 # --------------------------------------------------------------------------
 # Health
 # --------------------------------------------------------------------------
@@ -194,12 +304,20 @@ def health():
 # --------------------------------------------------------------------------
 
 @app.post("/transcribe")
-async def transcribe(
-    file: UploadFile = File(...),
-    language: Optional[str] = Form(None),
-    model: Optional[str] = Form(None),
-):
-    path, kind = await _save_upload(file, "audio")
+async def transcribe(request: Request):
+    content_type = request.headers.get("content-type", "")
+    language: Optional[str] = None
+    model: Optional[str] = None
+    if content_type.startswith("multipart/form-data"):
+        form = await request.form()
+        language = form.get("language") if isinstance(form.get("language"), str) else None
+        model = form.get("model") if isinstance(form.get("model"), str) else None
+    elif "application/json" in content_type:
+        body = await request.json()
+        if isinstance(body, dict):
+            language = body.get("language") if isinstance(body.get("language"), str) else None
+            model = body.get("model") if isinstance(body.get("model"), str) else None
+    path, kind = await _resolve_media_source(request, "audio")
     try:
         faster_whisper = _load_module(
             "faster_whisper",
@@ -235,8 +353,17 @@ async def transcribe(
 # --------------------------------------------------------------------------
 
 @app.post("/ocr")
-async def ocr(file: UploadFile = File(...), lang: str = Form("en")):
-    path, kind = await _save_upload(file, "image")
+async def ocr(request: Request):
+    content_type = request.headers.get("content-type", "")
+    lang = "en"
+    if content_type.startswith("multipart/form-data"):
+        form = await request.form()
+        lang = form.get("lang") if isinstance(form.get("lang"), str) else "en"
+    elif "application/json" in content_type:
+        body = await request.json()
+        if isinstance(body, dict) and isinstance(body.get("lang"), str):
+            lang = body["lang"]
+    path, kind = await _resolve_media_source(request, "image")
     try:
         paddleocr = _load_module(
             "paddleocr",
@@ -272,7 +399,13 @@ async def ocr(file: UploadFile = File(...), lang: str = Form("en")):
                 _walk(child)
 
     _walk(result)
-    return {"lines": lines, "text": "\n".join(l["text"] for l in lines), "kind": kind}
+    text = "\n".join(l["text"] for l in lines)
+    return {
+        "lines": lines,
+        "text": text,
+        "kind": kind,
+        "extracted": _extract_payment_fields(text),
+    }
 
 
 # --------------------------------------------------------------------------
@@ -434,6 +567,23 @@ def video_clip(req: ClipRequest):
         "command": command,
         "outputPath": str(output_path),
         "sizeBytes": output_path.stat().st_size,
+        # Base64 of the clip so a workflow can upload it straight to
+        # YouTube/Instagram; null when the clip is over the cap (the file
+        # stays on disk at outputPath for a download step instead).
+        "contentBase64": (
+            base64.b64encode(output_path.read_bytes()).decode("ascii")
+            if output_path.stat().st_size <= CLIP_BASE64_MAX_BYTES
+            else None
+        ),
+        # Public URL for the clip when the deployment serves MEDIA_DIR
+        # publicly (CB_PUBLIC_MEDIA_BASE_URL, e.g. https://media.example.com);
+        # null otherwise — Instagram Reels needs a public URL, so that step
+        # stays unconfigured until one is set.
+        "publicUrl": (
+            f"{os.environ.get('CB_PUBLIC_MEDIA_BASE_URL', '').rstrip('/')}/clips/{out_name}"
+            if os.environ.get("CB_PUBLIC_MEDIA_BASE_URL")
+            else None
+        ),
     }
 
 

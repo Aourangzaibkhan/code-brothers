@@ -12,6 +12,13 @@ export interface WebhookRequestData {
  * Webhook Trigger — the API layer hands the incoming HTTP request (as data)
  * to the engine as trigger data; this node validates and normalizes it into
  * a stable item shape for downstream nodes.
+ *
+ * Output shape: the request BODY is unwrapped to the top level of the item,
+ * so a workflow reads the payload directly (`{{ $json.orderId }}`, not
+ * `{{ $json.body.orderId }}`). The request metadata (method, path, headers,
+ * query) is kept under `{{ $json.webhook }}`. A manual run (no request
+ * envelope — the payload itself is the input) passes the payload through
+ * unchanged, so manual and webhook runs behave identically.
  */
 export const webhookTriggerNode = defineNode({
   type: 'core.webhookTrigger',
@@ -23,7 +30,8 @@ export const webhookTriggerNode = defineNode({
   inputs: { type: 'null', description: 'Receives the raw webhook request as run data' },
   outputs: {
     type: 'array',
-    description: 'Items with { method, path, headers, query, body }',
+    description:
+      'One item: the request body unwrapped to the top level, plus a `webhook` object with { method, path, headers, query }',
   },
   parameters: [
     {
@@ -55,15 +63,23 @@ export const webhookTriggerNode = defineNode({
           `Webhook method mismatch: expected ${expectedMethod.toUpperCase()}, got ${method}`,
         );
       }
-      return {
-        json: {
-          method,
-          path: req.path ?? ctx.parameters.path ?? '/',
-          headers: req.headers ?? {},
-          query: req.query ?? {},
-          body: req.body ?? null,
-        },
+      const webhook = {
+        method,
+        path: req.path ?? ctx.parameters.path ?? '/',
+        headers: req.headers ?? {},
+        query: req.query ?? {},
       };
+      // Webhook request envelope: unwrap the body to the top level so
+      // downstream nodes read the payload directly.
+      if (req && typeof req === 'object' && 'body' in req) {
+        const body = req.body;
+        if (body && typeof body === 'object' && !Array.isArray(body)) {
+          return { json: { ...(body as Record<string, unknown>), webhook } };
+        }
+        return { json: { body, webhook } };
+      }
+      // Manual run: the payload itself is the input — pass it through.
+      return { json: { ...(item.json as Record<string, unknown>), webhook } };
     });
     return [out];
   },

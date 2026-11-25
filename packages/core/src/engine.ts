@@ -2,17 +2,15 @@ import { randomUUID } from 'node:crypto';
 import {
   ConsoleNodeLogger,
   createRedactingLogger,
+  evaluateExpression,
+  renderTemplate,
+  type ExpressionData,
   type NodeContext,
   type NodeItem,
   type NodeLogger,
   type NodeOutputData,
   NodeRegistry,
 } from '@code-brothers/node-sdk';
-import {
-  evaluateExpression,
-  renderTemplate,
-  type ExpressionData,
-} from './expression.js';
 import { defaultSsrfGuard, type SsrfGuard } from './ssrf.js';
 import {
   WorkflowError,

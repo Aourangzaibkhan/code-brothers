@@ -2,9 +2,11 @@
   "dependencies": {
     "@code-brothers/connector-couriers": "file:../../packages/connectors/couriers",
     "@code-brothers/connector-ecommerce-local": "file:../../packages/connectors/ecommerce-local",
+    "@code-brothers/connector-registry": "file:../../packages/connector-registry",
     "@code-brothers/core": "file:../../packages/core",
     "@code-brothers/database": "file:../../packages/database",
     "@code-brothers/node-sdk": "file:../../packages/node-sdk",
+    "@code-brothers/rag-engine": "file:../../packages/rag-engine",
     "@code-brothers/security": "file:../../packages/security",
     "fastify": "^5.2.0"
   },

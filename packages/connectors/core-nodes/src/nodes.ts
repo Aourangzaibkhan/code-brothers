@@ -1,7 +1,11 @@
 import {
   defineNode,
+  renderParams,
+  renderStringParam,
+  renderValue,
   NodeRegistry,
   type NodeDefinition,
+  type NodeItem,
 } from '@code-brothers/node-sdk';
 import { createEmailSender, type EmailTransportOptions } from './email.js';
 import { generateTextPdf } from './pdf.js';
@@ -46,65 +50,68 @@ export const emailSendNode = defineNode({
     scopes: ['email:send'],
     filesystem: 'none',
   },
-  async execute(ctx) {
-    const from = ctx.parameters.from;
-    const to = ctx.parameters.to;
-    const subject = ctx.parameters.subject;
-    if (typeof from !== 'string' || typeof to !== 'string' || typeof subject !== 'string') {
-      throw new Error('Email Send node requires "from", "to" and "subject" parameters');
-    }
-    const text = typeof ctx.parameters.text === 'string' ? ctx.parameters.text : undefined;
-    const html = typeof ctx.parameters.html === 'string' ? ctx.parameters.html : undefined;
+  async execute(ctx, input) {
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
+    const out: NodeItem[] = [];
+    for (const item of items) {
+      const params = renderParams(ctx, item.json);
+      const from = params.from;
+      const to = params.to;
+      const subject = params.subject;
+      if (typeof from !== 'string' || typeof to !== 'string' || typeof subject !== 'string') {
+        throw new Error('Email Send node requires "from", "to" and "subject" parameters');
+      }
+      const text = typeof params.text === 'string' ? params.text : undefined;
+      const html = typeof params.html === 'string' ? params.html : undefined;
 
-    const mailTransport = ctx.variables.mailTransport;
-    let sender;
-    if (mailTransport !== undefined) {
-      // Documented test hook — see the node description above.
-      sender = createEmailSender({
-        transport: mailTransport as EmailTransportOptions,
-      });
-    } else {
-      const credentials = await ctx.getCredentials('smtp');
-      if (credentials && typeof credentials.host === 'string') {
+      const mailTransport = ctx.variables.mailTransport;
+      let sender;
+      if (mailTransport !== undefined) {
+        // Documented test hook — see the node description above.
         sender = createEmailSender({
-          transport: {
-            host: credentials.host,
-            port:
-              typeof credentials.port === 'number'
-                ? credentials.port
-                : Number(credentials.port ?? 587),
-            secure: credentials.secure === true || credentials.secure === 'true',
-            auth:
-              typeof credentials.user === 'string'
-                ? {
-                    user: credentials.user,
-                    pass:
-                      typeof credentials.pass === 'string' ? credentials.pass : '',
-                  }
-                : undefined,
-          },
+          transport: mailTransport as EmailTransportOptions,
         });
       } else {
-        // No SMTP configured: fall back to nodemailer's JSON transport so the
-        // node still produces a verifiable message record in dev/test.
-        sender = createEmailSender({ transport: { jsonTransport: true } });
+        const credentials = await ctx.getCredentials('smtp');
+        if (credentials && typeof credentials.host === 'string') {
+          sender = createEmailSender({
+            transport: {
+              host: credentials.host,
+              port:
+                typeof credentials.port === 'number'
+                  ? credentials.port
+                  : Number(credentials.port ?? 587),
+              secure: credentials.secure === true || credentials.secure === 'true',
+              auth:
+                typeof credentials.user === 'string'
+                  ? {
+                      user: credentials.user,
+                      pass:
+                        typeof credentials.pass === 'string' ? credentials.pass : '',
+                    }
+                  : undefined,
+            },
+          });
+        } else {
+          // No SMTP configured: fall back to nodemailer's JSON transport so the
+          // node still produces a verifiable message record in dev/test.
+          sender = createEmailSender({ transport: { jsonTransport: true } });
+        }
       }
-    }
 
-    const result = await sender.send({ from, to, subject, text, html });
-    return [
-      [
-        {
-          json: {
-            messageId: result.messageId,
-            from,
-            to,
-            subject,
-            ...(result.raw !== undefined ? { raw: result.raw } : {}),
-          },
+      const result = await sender.send({ from, to, subject, text, html });
+      out.push({
+        json: {
+          ...item.json,
+          messageId: result.messageId,
+          from,
+          to,
+          subject,
+          ...(result.raw !== undefined ? { raw: result.raw } : {}),
         },
-      ],
-    ];
+      });
+    }
+    return [out];
   },
 });
 
@@ -135,28 +142,29 @@ export const pdfGenerateNode = defineNode({
     scopes: [],
     filesystem: 'none',
   },
-  async execute(ctx) {
-    const text = ctx.parameters.text;
-    if (typeof text !== 'string') {
-      throw new Error('PDF Generate node requires a "text" parameter');
-    }
-    const title =
-      typeof ctx.parameters.title === 'string' ? ctx.parameters.title : undefined;
-    const pdf = await generateTextPdf({
-      title,
-      lines: text.split(/\r?\n/),
-    });
-    return [
-      [
-        {
-          json: {
-            filename: 'document.pdf',
-            mimeType: 'application/pdf',
-            base64: pdf.toString('base64'),
-          },
+  async execute(ctx, input) {
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
+    const out: NodeItem[] = [];
+    for (const item of items) {
+      const text = renderStringParam(ctx, 'text', item.json);
+      if (text === '') {
+        throw new Error('PDF Generate node requires a "text" parameter');
+      }
+      const title = renderStringParam(ctx, 'title', item.json) || undefined;
+      const pdf = await generateTextPdf({
+        title,
+        lines: text.split(/\r?\n/),
+      });
+      out.push({
+        json: {
+          ...item.json,
+          filename: 'document.pdf',
+          mimeType: 'application/pdf',
+          base64: pdf.toString('base64'),
         },
-      ],
-    ];
+      });
+    }
+    return [out];
   },
 });
 
@@ -195,45 +203,51 @@ export const googleSheetsAppendNode = defineNode({
     scopes: ['spreadsheets:append'],
     filesystem: 'none',
   },
-  async execute(ctx) {
-    const spreadsheetId = ctx.parameters.spreadsheetId;
-    const range = ctx.parameters.range;
-    if (typeof spreadsheetId !== 'string' || typeof range !== 'string') {
-      throw new Error(
-        'Google Sheets Append node requires "spreadsheetId" and "range" parameters',
-      );
-    }
-    const valuesRaw = ctx.parameters.valuesJson;
-    let values: unknown[][];
-    if (typeof valuesRaw === 'string') {
-      const parsed = JSON.parse(valuesRaw) as unknown;
-      if (!Array.isArray(parsed)) {
+  async execute(ctx, input) {
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
+    const out: NodeItem[] = [];
+    for (const item of items) {
+      const params = renderParams(ctx, item.json);
+      const spreadsheetId = params.spreadsheetId;
+      const range = params.range;
+      if (typeof spreadsheetId !== 'string' || typeof range !== 'string') {
+        throw new Error(
+          'Google Sheets Append node requires "spreadsheetId" and "range" parameters',
+        );
+      }
+      const valuesRaw = params.valuesJson;
+      let values: unknown[][];
+      if (typeof valuesRaw === 'string') {
+        const parsed = JSON.parse(valuesRaw) as unknown;
+        if (!Array.isArray(parsed)) {
+          throw new Error('"valuesJson" must be a JSON array of arrays');
+        }
+        values = parsed as unknown[][];
+      } else if (Array.isArray(valuesRaw)) {
+        values = valuesRaw as unknown[][];
+      } else {
         throw new Error('"valuesJson" must be a JSON array of arrays');
       }
-      values = parsed as unknown[][];
-    } else if (Array.isArray(valuesRaw)) {
-      values = valuesRaw as unknown[][];
-    } else {
-      throw new Error('"valuesJson" must be a JSON array of arrays');
+      const credentials = await ctx.getCredentials('googleSheets');
+      const accessToken = credentials?.accessToken;
+      if (typeof accessToken !== 'string' || accessToken === '') {
+        throw new Error(
+          'Google Sheets Append node requires the googleSheets credential field "accessToken"',
+        );
+      }
+      const client = new GoogleSheetsClient({
+        spreadsheetId,
+        accessToken,
+        fetch: ctx.fetch as typeof fetch,
+      });
+      const result = await client.appendValues(range, values);
+      const json =
+        result && typeof result === 'object'
+          ? (result as Record<string, unknown>)
+          : { result };
+      out.push({ json: { ...item.json, ...json, spreadsheetId, range } });
     }
-    const credentials = await ctx.getCredentials('googleSheets');
-    const accessToken = credentials?.accessToken;
-    if (typeof accessToken !== 'string' || accessToken === '') {
-      throw new Error(
-        'Google Sheets Append node requires the googleSheets credential field "accessToken"',
-      );
-    }
-    const client = new GoogleSheetsClient({
-      spreadsheetId,
-      accessToken,
-      fetch: ctx.fetch as typeof fetch,
-    });
-    const result = await client.appendValues(range, values);
-    const json =
-      result && typeof result === 'object'
-        ? (result as Record<string, unknown>)
-        : { result };
-    return [[{ json: { ...json, spreadsheetId, range } }]];
+    return [out];
   },
 });
 
@@ -270,8 +284,13 @@ export const csvTransformNode = defineNode({
     filesystem: 'none',
   },
   async execute(ctx, input) {
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
     let mapping: Record<string, string> = {};
-    const mappingRaw = ctx.parameters.columnMappingJson;
+    const mappingRaw = renderValue(
+      ctx,
+      ctx.parameters.columnMappingJson,
+      items[0]?.json ?? {},
+    );
     if (typeof mappingRaw === 'string' && mappingRaw.trim() !== '') {
       const parsed = JSON.parse(mappingRaw) as unknown;
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {

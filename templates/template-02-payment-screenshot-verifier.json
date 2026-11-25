@@ -18,9 +18,9 @@
       "name": "OCR Receipt",
       "parameters": {
         "method": "POST",
-        "url": "http://ai-media-worker:8000/ocr",
+        "url": "{{ $vars.mediaWorkerBaseUrl }}/ocr",
         "body": {
-          "mediaId": "{{ $json.mediaId }}"
+          "mediaUrl": "{{ $json.mediaUrl }}"
         },
         "responseType": "json"
       }
@@ -33,11 +33,11 @@
         "assignments": [
           {
             "name": "tid",
-            "value": "{{ $json.extracted.tid }}"
+            "value": "{{ $json.body.extracted.tid }}"
           },
           {
             "name": "amount",
-            "value": "{{ $json.extracted.amount }}"
+            "value": "{{ $json.body.extracted.amount }}"
           },
           {
             "name": "orderId",
@@ -51,7 +51,7 @@
       "type": "local.dbQuery",
       "name": "Check TID Ledger",
       "parameters": {
-        "sql": "SELECT COUNT(*) AS duplicates FROM payment_tids WHERE tid = ?",
+        "sql": "SELECT COUNT(*) AS duplicates FROM payment_tids WHERE tid = $1",
         "valuesJson": "[\"{{ $json.tid }}\"]"
       }
     },
@@ -79,8 +79,8 @@
       "type": "local.dbQuery",
       "name": "Record TID + Mark Paid",
       "parameters": {
-        "sql": "INSERT INTO payment_tids (tid, amount, order_id) VALUES (?, ?, ?)",
-        "valuesJson": "[\"{{ $json.tid }}\", \"{{ $json.amount }}\", \"{{ $json.orderId }}\"]"
+        "sql": "INSERT INTO payment_tids (tid, amount, order_ref, user_id) VALUES ($1, $2, $3, $4)",
+        "valuesJson": "[\"{{ $json.tid }}\", \"{{ $json.amount }}\", \"{{ $json.orderId }}\", \"{{ $vars.userId }}\"]"
       }
     },
     {
@@ -106,13 +106,17 @@
         "to": "{{ $json.customerPhone }}",
         "body": "Payment verified. Your order {{ $json.orderId }} is booked. Tracking number: {{ $json.awb }}"
       }
+    },
+    {
+      "id": "download-media",
+      "type": "whatsapp.downloadMedia",
+      "name": "Resolve Screenshot URL",
+      "parameters": {
+        "mediaId": "{{ $json.mediaId }}"
+      }
     }
   ],
   "edges": [
-    {
-      "from": "trigger",
-      "to": "ocr"
-    },
     {
       "from": "ocr",
       "to": "extract"
@@ -142,9 +146,20 @@
     {
       "from": "book-courier",
       "to": "send-slip"
+    },
+    {
+      "from": "trigger",
+      "to": "download-media"
+    },
+    {
+      "from": "download-media",
+      "to": "ocr"
     }
   ],
   "settings": {
-    "timezone": "Asia/Karachi"
+    "timezone": "Asia/Karachi",
+    "variables": {
+      "mediaWorkerBaseUrl": "http://ai-media-worker:8000"
+    }
   }
 }

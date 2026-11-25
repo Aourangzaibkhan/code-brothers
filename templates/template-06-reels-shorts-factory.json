@@ -1,7 +1,7 @@
 {
   "id": "template-06-reels-shorts-factory",
   "name": "1-Click Long Video to 5 Reels/Shorts Factory",
-  "description": "Spec Section 10 #6. Drop a long YouTube video -> Whisper transcription -> AI picks the top 5 viral clips -> AI media worker crops each to 9:16 with burned multilingual captions -> uploads to YouTube Shorts and Instagram Reels.",
+  "description": "Transcribe a long video, cut one Short/Reel per transcription segment, upload each to YouTube Shorts and publish it as an Instagram Reel. (Clip boundaries come from the transcription segments \u2014 the media worker does not pick 'viral' moments.)",
   "nodes": [
     {
       "id": "trigger",
@@ -20,7 +20,7 @@
       "name": "Transcribe (Whisper)",
       "parameters": {
         "method": "POST",
-        "url": "http://ai-media-worker:8000/transcribe",
+        "url": "{{ $vars.mediaWorkerBaseUrl }}/transcribe",
         "body": {
           "filePath": "{{ $json.sourcePath }}",
           "language": "{{ $json.language }}"
@@ -36,7 +36,7 @@
         "assignments": [
           {
             "name": "clips",
-            "value": "{{ $json.viralClips }}"
+            "value": "{{ $json.body.segments.map(s => ({ start: s.start, duration: Math.max(1, Math.round((s.end - s.start) * 10) / 10), title: s.text.trim(), description: s.text.trim() })) }}"
           }
         ]
       }
@@ -55,9 +55,9 @@
       "name": "Crop 9:16 + Burn Captions",
       "parameters": {
         "method": "POST",
-        "url": "http://ai-media-worker:8000/video/clip",
+        "url": "{{ $vars.mediaWorkerBaseUrl }}/video/clip",
         "body": {
-          "inputPath": "{{ $json.sourcePath }}",
+          "inputPath": "{{ $node[\"Drop Long Video\"].json.sourcePath }}",
           "start": "{{ $json.start }}",
           "duration": "{{ $json.duration }}",
           "captions": "{{ $json.captionsPath }}"
@@ -74,7 +74,7 @@
         "description": "{{ $json.description }}",
         "privacyStatus": "public",
         "tags": "shorts",
-        "contentBase64": "{{ $json.contentBase64 }}",
+        "contentBase64": "{{ $json.body.contentBase64 }}",
         "contentType": "video/mp4"
       }
     },
@@ -83,7 +83,7 @@
       "type": "instagram.publishPost",
       "name": "Publish Instagram Reel",
       "parameters": {
-        "videoUrl": "{{ $json.publicUrl }}",
+        "videoUrl": "{{ $json.body.publicUrl }}",
         "mediaType": "REELS",
         "caption": "{{ $json.title }}"
       }
@@ -116,6 +116,9 @@
     }
   ],
   "settings": {
-    "timezone": "Asia/Karachi"
+    "timezone": "Asia/Karachi",
+    "variables": {
+      "mediaWorkerBaseUrl": "http://ai-media-worker:8000"
+    }
   }
 }

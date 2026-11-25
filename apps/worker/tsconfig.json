@@ -16,6 +16,9 @@
     },
     {
       "path": "../../packages/security"
+    },
+    {
+      "path": "../../packages/connector-registry"
     }
   ]
 }

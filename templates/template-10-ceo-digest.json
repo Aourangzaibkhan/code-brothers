@@ -38,27 +38,6 @@
       }
     },
     {
-      "id": "aggregate",
-      "type": "core.setData",
-      "name": "Aggregate Daily Totals",
-      "parameters": {
-        "assignments": [
-          {
-            "name": "digestText",
-            "value": "{{ $json.digestText }}"
-          },
-          {
-            "name": "totalRevenue",
-            "value": "{{ $json.totalRevenue }}"
-          },
-          {
-            "name": "totalOrders",
-            "value": "{{ $json.totalOrders }}"
-          }
-        ]
-      }
-    },
-    {
       "id": "pdf",
       "type": "core.pdfGenerate",
       "name": "Build PDF Digest",
@@ -75,6 +54,17 @@
         "to": "{{ $vars.ownerPhone }}",
         "body": "Daily Digest: {{ $json.totalOrders }} orders, revenue {{ $json.totalRevenue }}. Full PDF report attached in the dashboard."
       }
+    },
+    {
+      "id": "aggregate",
+      "type": "core.aggregate",
+      "name": "Aggregate Daily Totals",
+      "parameters": {
+        "sumFields": "total_price,total,price,amount",
+        "countName": "totalOrders",
+        "sumName": "totalRevenue",
+        "textTemplate": "Daily digest: {{ $json.totalOrders }} orders, revenue {{ $json.totalRevenue }}."
+      }
     }
   ],
   "edges": [
@@ -83,12 +73,20 @@
       "to": "shopify-orders"
     },
     {
-      "from": "shopify-orders",
+      "from": "trigger",
       "to": "daraz-orders"
     },
     {
-      "from": "daraz-orders",
+      "from": "trigger",
       "to": "woo-orders"
+    },
+    {
+      "from": "shopify-orders",
+      "to": "aggregate"
+    },
+    {
+      "from": "daraz-orders",
+      "to": "aggregate"
     },
     {
       "from": "woo-orders",

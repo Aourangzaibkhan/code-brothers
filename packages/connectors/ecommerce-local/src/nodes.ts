@@ -1,5 +1,8 @@
 import {
   defineNode,
+  renderParams,
+  renderStringParam,
+  renderValue,
   NodeRegistry,
   type NodeDefinition,
   type NodeItem,
@@ -61,24 +64,9 @@ export const localDbQueryNode = defineNode({
     filesystem: 'none',
     description: 'Database access only, via the configured connection string',
   },
-  async execute(ctx) {
-    const sql = ctx.parameters.sql;
-    if (typeof sql !== 'string' || sql.trim() === '') {
-      throw new Error('Local DB Query node requires a "sql" parameter');
-    }
-    const valuesRaw = ctx.parameters.valuesJson;
-    let values: unknown[] = [];
-    if (typeof valuesRaw === 'string' && valuesRaw.trim() !== '') {
-      const parsed = JSON.parse(valuesRaw) as unknown;
-      if (!Array.isArray(parsed)) {
-        throw new Error('"valuesJson" must be a JSON array');
-      }
-      values = parsed;
-    } else if (Array.isArray(valuesRaw)) {
-      values = valuesRaw;
-    }
-
-    let connector: SqlStoreConnector;
+  async execute(ctx, input) {
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
+    let connector: SqlStoreConnector | undefined;
     const hook = ctx.variables.sqlConnector;
     if (hook instanceof SqlStoreConnector) {
       // Documented test/embedding hook — see the node description above.
@@ -95,13 +83,42 @@ export const localDbQueryNode = defineNode({
     }
 
     try {
-      const { rows } = await connector.query(sql, values);
-      const out: NodeItem[] = rows.map((row) => ({
-        json:
-          row && typeof row === 'object'
-            ? (row as Record<string, unknown>)
-            : { value: row },
-      }));
+      const out: NodeItem[] = [];
+      for (const item of items) {
+        const sql = renderStringParam(ctx, 'sql', item.json);
+        if (sql.trim() === '') {
+          throw new Error('Local DB Query node requires a "sql" parameter');
+        }
+        const valuesRaw = renderValue(ctx, ctx.parameters.valuesJson, item.json);
+        let values: unknown[] = [];
+        if (typeof valuesRaw === 'string' && valuesRaw.trim() !== '') {
+          const parsed = JSON.parse(valuesRaw) as unknown;
+          if (!Array.isArray(parsed)) {
+            throw new Error('"valuesJson" must be a JSON array');
+          }
+          values = parsed;
+        } else if (Array.isArray(valuesRaw)) {
+          values = valuesRaw;
+        }
+        const { rows, rowCount } = await connector.query(sql, values);
+        if (rows.length === 0) {
+          // A write (INSERT/UPDATE/DELETE) returns no rows: pass the item
+          // through annotated, so the chain keeps flowing.
+          out.push({
+            json: { ...item.json, affectedRows: rowCount ?? 0 },
+          });
+        }
+        for (const row of rows) {
+          out.push({
+            json: {
+              ...item.json,
+              ...(row && typeof row === 'object'
+                ? (row as Record<string, unknown>)
+                : { value: row }),
+            },
+          });
+        }
+      }
       return [out];
     } finally {
       if (!(hook instanceof SqlStoreConnector)) {
@@ -145,12 +162,13 @@ export const localSendWebhookNode = defineNode({
     filesystem: 'none',
   },
   async execute(ctx, input) {
-    const url = ctx.parameters.url;
-    const event = ctx.parameters.event;
-    if (typeof url !== 'string' || url === '') {
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
+    const url = renderStringParam(ctx, 'url', items[0]?.json ?? {});
+    const event = renderStringParam(ctx, 'event', items[0]?.json ?? {});
+    if (url === '') {
       throw new Error('Local Send Webhook node requires a "url" parameter');
     }
-    if (typeof event !== 'string' || event === '') {
+    if (event === '') {
       throw new Error('Local Send Webhook node requires an "event" parameter');
     }
     const credentials = await ctx.getCredentials('localStore');
@@ -166,12 +184,12 @@ export const localSendWebhookNode = defineNode({
       fetch: ctx.fetch as typeof fetch,
       source: 'code-brothers/local.sendWebhook',
     });
-    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
     const out: NodeItem[] = [];
     for (const [index, item] of items.entries()) {
       const result = await emitter.emit(event, item.json);
       out.push({
         json: {
+          ...item.json,
           event,
           status: result.status,
           responseBody: result.body,
@@ -221,7 +239,7 @@ export const wooGetOrdersNode = defineNode({
     scopes: ['orders:read'],
     filesystem: 'none',
   },
-  async execute(ctx) {
+  async execute(ctx, input) {
     const credentials = await ctx.getCredentials('localStore');
     const storeUrl = credentials?.storeUrl;
     const consumerKey = credentials?.consumerKey;
@@ -241,16 +259,17 @@ export const wooGetOrdersNode = defineNode({
       consumerSecret,
       fetch: ctx.fetch as typeof fetch,
     });
-    const params: Record<string, unknown> = {};
-    const status = ctx.parameters.status;
+    const params = renderParams(ctx, input[0]?.json ?? {});
+    const query: Record<string, unknown> = {};
+    const status = params.status;
     if (typeof status === 'string' && status !== '' && status !== 'any') {
-      params.status = status;
+      query.status = status;
     }
-    const perPage = ctx.parameters.perPage;
+    const perPage = params.perPage;
     if (typeof perPage === 'number' && perPage > 0) {
-      params.per_page = perPage;
+      query.per_page = perPage;
     }
-    const orders = await client.getOrders<unknown>(params);
+    const orders = await client.getOrders<unknown>(query);
     const list = Array.isArray(orders) ? orders : [];
     const out: NodeItem[] = list.map((order, index) => ({
       json:

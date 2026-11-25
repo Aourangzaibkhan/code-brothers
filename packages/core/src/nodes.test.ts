@@ -4,9 +4,10 @@ import type { AddressInfo } from 'node:net';
 import { after, before, describe, it } from 'node:test';
 import {
   createTestNodeContext,
+  evaluateExpression,
+  renderTemplate,
   type NodeContext,
 } from '@code-brothers/node-sdk';
-import { evaluateExpression, renderTemplate } from './expression.js';
 import { cronTriggerNode } from './nodes/cron-trigger.js';
 import { httpRequestNode } from './nodes/http-request.js';
 import { evaluateCondition, ifNode } from './nodes/if.js';
@@ -187,7 +188,7 @@ describe('Cron Trigger node', () => {
 });
 
 describe('Webhook Trigger node', () => {
-  it('normalizes a supplied request object', async () => {
+  it('unwraps the request body to the top level, keeping metadata under webhook', async () => {
     const ctx = makeCtx({});
     const [out] = await webhookTriggerNode.execute(ctx, [
       {
@@ -201,13 +202,22 @@ describe('Webhook Trigger node', () => {
       },
     ]);
     const json = out?.[0]?.json as {
-      method: string;
-      path: string;
-      body: { orderId: number };
+      orderId: number;
+      webhook: { method: string; path: string };
     };
-    assert.equal(json.method, 'POST');
-    assert.equal(json.path, '/hooks/order');
-    assert.equal(json.body.orderId, 5);
+    assert.equal(json.orderId, 5);
+    assert.equal(json.webhook.method, 'POST');
+    assert.equal(json.webhook.path, '/hooks/order');
+  });
+
+  it('passes a manual-run payload through unchanged', async () => {
+    const ctx = makeCtx({});
+    const [out] = await webhookTriggerNode.execute(ctx, [
+      { json: { messageType: 'text', text: 'red shoes' } },
+    ]);
+    const json = out?.[0]?.json as { messageType: string; text: string };
+    assert.equal(json.messageType, 'text');
+    assert.equal(json.text, 'red shoes');
   });
 
   it('rejects a mismatched method when one is configured', async () => {
@@ -264,6 +274,31 @@ describe('HTTP Request node', () => {
     assert.equal(json.body.name, 'Ada');
   });
 
+  it('deep-renders {{ }} expressions inside an object body per item', async () => {
+    const ctx = makeCtx({
+      method: 'POST',
+      url: `${baseUrl}/echo`,
+      body: { query: '{{ $json.question }}', limit: 3, nested: { tag: '{{ $json.tag }}' } },
+    });
+    const [out] = await httpRequestNode.execute(ctx, [
+      { json: { question: 'red shoes', tag: 'sale' } },
+    ]);
+    const json = out?.[0]?.json as {
+      statusCode: number;
+      body: { body: string };
+    };
+    assert.equal(json.statusCode, 200);
+    // The /echo fixture returns the raw request body as a string.
+    const echoed = JSON.parse(json.body.body) as {
+      query: string;
+      limit: number;
+      nested: { tag: string };
+    };
+    assert.equal(echoed.query, 'red shoes');
+    assert.equal(echoed.limit, 3);
+    assert.equal(echoed.nested.tag, 'sale');
+  });
+
   it('throws on HTTP errors by default', async () => {
     const ctx = makeCtx({ method: 'GET', url: `${baseUrl}/missing` });
     await assert.rejects(
@@ -285,5 +320,29 @@ describe('HTTP Request node', () => {
       () => httpRequestNode.execute(ctx, [{ json: {} }]),
       SsrfError,
     );
+  });
+});
+
+describe('Aggregate node', () => {
+  it('counts items and sums the first matching amount field per item', async () => {
+    const { ctx } = createTestNodeContext({
+      parameters: {
+        sumFields: 'total_price,total,price,amount',
+        countName: 'totalOrders',
+        sumName: 'totalRevenue',
+        textTemplate: 'Daily digest: {{ $json.totalOrders }} orders, revenue {{ $json.totalRevenue }}.',
+      },
+    });
+    const { aggregateNode } = await import('./nodes/aggregate.js');
+    const [out] = await aggregateNode.execute(ctx, [
+      { json: { total_price: '120.50' } },
+      { json: { total: 30 } },
+      { json: { price: 9.99 } },
+      { json: { note: 'no amount field' } },
+    ]);
+    const json = out?.[0]?.json as Record<string, unknown>;
+    assert.equal(json.totalOrders, 4);
+    assert.equal(json.totalRevenue, 160.49);
+    assert.equal(json.digestText, 'Daily digest: 4 orders, revenue 160.49.');
   });
 });

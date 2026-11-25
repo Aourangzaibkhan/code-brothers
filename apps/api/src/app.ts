@@ -43,9 +43,11 @@ import {
   type EncryptedSecret,
 } from '@code-brothers/security';
 import {
-  createEngine,
+  createSsrfGuard,
+  WorkflowEngine,
   type WorkflowDefinition,
 } from '@code-brothers/core';
+import { createPlatformRegistry } from '@code-brothers/connector-registry';
 import {
   createMemoryStores,
   type CredentialRecord,
@@ -62,6 +64,11 @@ import {
   type CourierCredentials,
   type OpsState,
 } from './modules/index.js';
+import {
+  createRagState,
+  registerRagRoutes,
+  type RagState,
+} from './modules/rag.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -89,12 +96,22 @@ export interface ApiOptions {
   stores?: Stores;
   /** Pre-built business/ops module state (spec §7; defaults to fresh). */
   ops?: OpsState;
+  /** Pre-built RAG state (defaults to fresh, in-memory). */
+  rag?: RagState;
   /** Injectable courier HTTP transport (tests pass a mock fetch). */
   courierFetch?: typeof fetch;
   /** Fallback courier credentials when a request carries none. */
   courierCredentials?: CourierCredentials;
   /** Fallback courier base URL override (sandbox / local mock). */
   courierBaseUrl?: string;
+  /**
+   * Hosts the workflow SSRF guard allows in addition to public hosts.
+   * Default: CB_INTERNAL_HOSTS env (comma-separated) or
+   * `localhost,ai-media-worker,host.docker.internal` — the platform's own
+   * services (the RAG endpoint and the AI media worker) that the shipped
+   * templates call. Everything else private stays blocked.
+   */
+  internalHosts?: string[];
   logger?: boolean;
 }
 
@@ -103,6 +120,8 @@ export interface BuiltApi {
   stores: Stores;
   /** Business/ops module state (spec §7) — snapshot/restore live here. */
   ops: OpsState;
+  /** RAG knowledge state (documents + vector store). */
+  rag: RagState;
   setupTokenService: SetupTokenService;
   /** The one-time setup token, present only while setup is still pending. */
   setupToken?: string;
@@ -169,11 +188,23 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
   const now = options.now ?? Date.now;
   const stores = options.stores ?? createMemoryStores();
   const ops = options.ops ?? createOpsState();
+  const rag = options.rag ?? createRagState();
   const throttle = options.throttle ?? new LoginThrottle();
   const setupTokenService = options.setupTokenService ?? new SetupTokenService();
   const sessionTtlMs = options.sessionTtlMs ?? 24 * 60 * 60 * 1000;
   const nonceTtlMs = options.nonceTtlMs ?? 10 * 60 * 1000;
   const timestampToleranceMs = options.webhookTimestampToleranceMs ?? 5 * 60 * 1000;
+
+  // The workflow engine runs with EVERY shipped node (core + all
+  // connectors) so any template can run; the SSRF guard still blocks
+  // private targets except the platform's own internal hosts.
+  const platformRegistry = createPlatformRegistry();
+  const internalHosts =
+    options.internalHosts ??
+    (process.env.CB_INTERNAL_HOSTS
+      ? process.env.CB_INTERNAL_HOSTS.split(',').map((h) => h.trim()).filter(Boolean)
+      : ['localhost', 'ai-media-worker', 'host.docker.internal']);
+  const ssrfGuard = createSsrfGuard({ allowedHosts: internalHosts });
 
   let masterKey: Buffer;
   let masterKeyConfigured: boolean;
@@ -290,8 +321,9 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
       triggerNodeId?: string;
     },
   ): Promise<StoredExecution> {
-    const engine = createEngine({
+    const engine = new WorkflowEngine(platformRegistry, {
       redactor: (value) => redact(value),
+      ssrfGuard,
       credentialsProvider: async (name) => {
         const cred = await stores.credentials.findByName(workflow.userId, name);
         if (!cred) return undefined;
@@ -317,7 +349,10 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
     };
     const record = await engine.execute(definition, {
       triggerData: run.triggerData,
-      variables: run.variables,
+      // The owning merchant's id is always available to templates as
+      // $vars.userId (e.g. template-02's payment_tids INSERT needs it —
+      // user_id is NOT NULL there and the trigger payload cannot know it).
+      variables: { userId: workflow.userId, ...(run.variables ?? {}) },
       triggerNodeId: run.triggerNodeId,
     });
     const stored: StoredExecution = {
@@ -986,6 +1021,9 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
     courierBaseUrl: options.courierBaseUrl,
   });
 
+  // -- retrieval for the WhatsApp sales-assistant template ----------------
+  registerRagRoutes(app, { rag, ops, requireAuth, requireOwner });
+
   // -- webhook gateway (public, HMAC-authenticated) ------------------------------
 
   await app.register(async (hooks) => {
@@ -1104,5 +1142,5 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
   const ownerAtBoot = await stores.users.findOwner();
   const setupToken = ownerAtBoot ? undefined : setupTokenService.generateSetupToken();
 
-  return { app, stores, ops, setupTokenService, setupToken, masterKeyConfigured };
+  return { app, stores, ops, rag, setupTokenService, setupToken, masterKeyConfigured };
 }

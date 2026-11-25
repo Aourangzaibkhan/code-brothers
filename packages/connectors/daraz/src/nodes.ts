@@ -1,8 +1,10 @@
 import {
   defineNode,
+  renderParams,
   NodeRegistry,
   type NodeContext,
   type NodeDefinition,
+  type NodeItem,
 } from '@code-brothers/node-sdk';
 import { DarazClient, DARAZ_BASE_URLS, type DarazCountry } from './client.js';
 
@@ -20,6 +22,8 @@ async function clientFromContext(ctx: NodeContext): Promise<DarazClient> {
     appSecret: String(creds.appSecret),
     accessToken: creds.accessToken ? String(creds.accessToken) : undefined,
     country,
+    // Optional override (sandbox / local mock) — omit for the real API.
+    baseUrl: creds.baseUrl ? String(creds.baseUrl) : undefined,
     fetch: ctx.fetch as unknown as typeof fetch,
   });
 }
@@ -29,7 +33,7 @@ const credentialRequirement = [
     name: DARAZ_CREDENTIAL_SLOT,
     displayName: 'Daraz API',
     required: true,
-    fields: ['appKey', 'appSecret', 'accessToken', 'country'],
+    fields: ['appKey', 'appSecret', 'accessToken', 'country', 'baseUrl'],
   },
 ];
 
@@ -66,14 +70,15 @@ export const darazGetOrdersNode: NodeDefinition = defineNode({
   ],
   credentials: credentialRequirement,
   permissions: { network: { hosts: darazHosts }, scopes: ['orders:read'] },
-  async execute(ctx) {
+  async execute(ctx, input) {
     const client = await clientFromContext(ctx);
+    const params = renderParams(ctx, input[0]?.json ?? {});
     const result = await client.getOrders({
-      createdAfter: ctx.parameters.createdAfter ? String(ctx.parameters.createdAfter) : undefined,
-      status: ctx.parameters.status ? String(ctx.parameters.status) : undefined,
+      createdAfter: params.createdAfter ? String(params.createdAfter) : undefined,
+      status: params.status ? String(params.status) : undefined,
       limit:
-        ctx.parameters.limit !== undefined && ctx.parameters.limit !== null && ctx.parameters.limit !== ''
-          ? Number(ctx.parameters.limit)
+        params.limit !== undefined && params.limit !== null && params.limit !== ''
+          ? Number(params.limit)
           : undefined,
     });
     return [extractOrders(result).map((o) => ({ json: o }))];
@@ -94,16 +99,22 @@ export const darazUpdateStockNode: NodeDefinition = defineNode({
   ],
   credentials: credentialRequirement,
   permissions: { network: { hosts: darazHosts }, scopes: ['products:write'] },
-  async execute(ctx) {
+  async execute(ctx, input) {
     const client = await clientFromContext(ctx);
-    const sellerSku = String(ctx.parameters.sellerSku ?? '');
-    const quantity = Number(ctx.parameters.quantity);
-    const result = await client.updateStock(sellerSku, quantity);
-    const json: Record<string, unknown> =
-      result && typeof result === 'object' && !Array.isArray(result)
-        ? { ...(result as Record<string, unknown>), sellerSku, quantity }
-        : { sellerSku, quantity, result };
-    return [[{ json }]];
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
+    const out: NodeItem[] = [];
+    for (const item of items) {
+      const params = renderParams(ctx, item.json);
+      const sellerSku = String(params.sellerSku ?? '');
+      const quantity = Number(params.quantity);
+      const result = await client.updateStock(sellerSku, quantity);
+      const json: Record<string, unknown> =
+        result && typeof result === 'object' && !Array.isArray(result)
+          ? { ...item.json, ...(result as Record<string, unknown>), sellerSku, quantity }
+          : { ...item.json, sellerSku, quantity, result };
+      out.push({ json });
+    }
+    return [out];
   },
 });
 

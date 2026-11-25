@@ -1,4 +1,11 @@
-import { defineNode, type NodeContext, type NodeDefinition, type NodeRegistry } from '@code-brothers/node-sdk';
+import {
+  defineNode,
+  renderStringParam,
+  type NodeContext,
+  type NodeDefinition,
+  type NodeItem,
+  type NodeRegistry,
+} from '@code-brothers/node-sdk';
 import { GraphApiClient } from './graph-client.js';
 
 const CREDENTIALS = [
@@ -6,7 +13,7 @@ const CREDENTIALS = [
     name: 'instagramGraph',
     displayName: 'Instagram Graph API',
     required: true,
-    fields: ['accessToken', 'igUserId'],
+    fields: ['accessToken', 'igUserId', 'baseUrl'],
   },
 ];
 
@@ -30,14 +37,20 @@ async function getClient(ctx: NodeContext): Promise<GraphApiClient> {
   return new GraphApiClient({
     igUserId,
     accessToken,
+    // Optional override (sandbox / local mock) — omit for the real API.
+    baseUrl: typeof creds?.baseUrl === 'string' && creds.baseUrl !== '' ? creds.baseUrl : undefined,
     fetch: ((url: string | URL, init?: RequestInit) => ctx.fetch(url, init)) as typeof fetch,
     sleep: (ms: number) => ctx.sleep(ms),
   });
 }
 
-function strParam(ctx: NodeContext, name: string): string {
-  const value = ctx.parameters[name];
-  return typeof value === 'string' ? value : value === undefined || value === null ? '' : String(value);
+function strParam(
+  ctx: NodeContext,
+  name: string,
+  itemJson: Record<string, unknown>,
+): string {
+  const value = renderStringParam(ctx, name, itemJson);
+  return value;
 }
 
 export const instagramPublishPost: NodeDefinition = defineNode({
@@ -76,20 +89,25 @@ export const instagramPublishPost: NodeDefinition = defineNode({
   ],
   credentials: CREDENTIALS,
   permissions: PERMISSIONS,
-  async execute(ctx) {
+  async execute(ctx, input) {
     const client = await getClient(ctx);
-    const imageUrl = strParam(ctx, 'imageUrl');
-    const videoUrl = strParam(ctx, 'videoUrl');
-    const mediaType = strParam(ctx, 'mediaType') || 'IMAGE';
-    const caption = strParam(ctx, 'caption');
-    const result = await client.publishMedia({
-      ...(imageUrl ? { imageUrl } : {}),
-      ...(videoUrl ? { videoUrl } : {}),
-      mediaType,
-      ...(caption ? { caption } : {}),
-    });
-    ctx.logger.info('Published Instagram media', { id: String(result.id ?? '') });
-    return [[{ json: { ...result } }]];
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
+    const out: NodeItem[] = [];
+    for (const item of items) {
+      const imageUrl = strParam(ctx, 'imageUrl', item.json);
+      const videoUrl = strParam(ctx, 'videoUrl', item.json);
+      const mediaType = strParam(ctx, 'mediaType', item.json) || 'IMAGE';
+      const caption = strParam(ctx, 'caption', item.json);
+      const result = await client.publishMedia({
+        ...(imageUrl ? { imageUrl } : {}),
+        ...(videoUrl ? { videoUrl } : {}),
+        mediaType,
+        ...(caption ? { caption } : {}),
+      });
+      ctx.logger.info('Published Instagram media', { id: String(result.id ?? '') });
+      out.push({ json: { ...item.json, ...result } });
+    }
+    return [out];
   },
 });
 
@@ -107,10 +125,18 @@ export const instagramReplyComment: NodeDefinition = defineNode({
   ],
   credentials: CREDENTIALS,
   permissions: PERMISSIONS,
-  async execute(ctx) {
+  async execute(ctx, input) {
     const client = await getClient(ctx);
-    const result = await client.replyToComment(strParam(ctx, 'commentId'), strParam(ctx, 'message'));
-    return [[{ json: { ...result } }]];
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
+    const out: NodeItem[] = [];
+    for (const item of items) {
+      const result = await client.replyToComment(
+        strParam(ctx, 'commentId', item.json),
+        strParam(ctx, 'message', item.json),
+      );
+      out.push({ json: { ...item.json, ...result } });
+    }
+    return [out];
   },
 });
 
@@ -128,13 +154,18 @@ export const instagramSendDm: NodeDefinition = defineNode({
   ],
   credentials: CREDENTIALS,
   permissions: PERMISSIONS,
-  async execute(ctx) {
+  async execute(ctx, input) {
     const client = await getClient(ctx);
-    const result = await client.sendDirectMessage(
-      strParam(ctx, 'recipientId'),
-      strParam(ctx, 'message'),
-    );
-    return [[{ json: { ...result } }]];
+    const items: NodeItem[] = input.length > 0 ? input : [{ json: {} }];
+    const out: NodeItem[] = [];
+    for (const item of items) {
+      const result = await client.sendDirectMessage(
+        strParam(ctx, 'recipientId', item.json),
+        strParam(ctx, 'message', item.json),
+      );
+      out.push({ json: { ...item.json, ...result } });
+    }
+    return [out];
   },
 });
 

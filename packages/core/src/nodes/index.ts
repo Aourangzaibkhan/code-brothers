@@ -1,4 +1,5 @@
 import { NodeRegistry, type NodeDefinition } from '@code-brothers/node-sdk';
+import { aggregateNode } from './aggregate.js';
 import { cronTriggerNode } from './cron-trigger.js';
 import { httpRequestNode } from './http-request.js';
 import { ifNode } from './if.js';
@@ -11,6 +12,7 @@ import { switchNode } from './switch.js';
 import { waitNode } from './wait.js';
 import { webhookTriggerNode } from './webhook-trigger.js';
 
+export { aggregateNode } from './aggregate.js';
 export { cronTriggerNode } from './cron-trigger.js';
 export { httpRequestNode } from './http-request.js';
 export { ifNode, evaluateCondition, valuesEqual } from './if.js';
@@ -38,6 +40,7 @@ export const coreNodes: NodeDefinition[] = [
   loopNode,
   waitNode,
   setDataNode,
+  aggregateNode,
   logNode,
   noopNode,
 ];

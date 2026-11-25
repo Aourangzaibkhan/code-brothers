@@ -1,4 +1,8 @@
-import { defineNode, type NodeItem } from '@code-brothers/node-sdk';
+import {
+  defineNode,
+  renderValue,
+  type NodeItem,
+} from '@code-brothers/node-sdk';
 
 /**
  * HTTP Request — calls ctx.fetch, which the engine wraps with the SSRF
@@ -14,7 +18,8 @@ export const httpRequestNode = defineNode({
   inputs: { type: 'array', description: 'Items used to render the URL/body templates' },
   outputs: {
     type: 'array',
-    description: 'Items with { statusCode, headers, body }',
+    description:
+      'Items with { statusCode, headers, body } merged into the input item, so upstream fields stay available downstream',
   },
   parameters: [
     { name: 'method', displayName: 'Method', type: 'options', default: 'GET',
@@ -62,7 +67,10 @@ export const httpRequestNode = defineNode({
         if (typeof params.body === 'string') {
           body = String(ctx.renderTemplate(params.body, item.json) ?? '');
         } else {
-          body = JSON.stringify(params.body);
+          // Object/array bodies are deep-rendered per item first, so
+          // `{{ $json.question }}` inside a JSON body resolves instead of
+          // being sent to the server literally.
+          body = JSON.stringify(renderValue(ctx, params.body, item.json));
           if (!Object.keys(headers).some((h) => h.toLowerCase() === 'content-type')) {
             headers['content-type'] = 'application/json';
           }
@@ -85,7 +93,11 @@ export const httpRequestNode = defineNode({
         );
       }
       out.push({
+        // The response is merged into the item that triggered the call, so
+        // upstream fields (trigger data, earlier setData assignments) stay
+        // available downstream as `$json.*`; the response wins on conflict.
         json: {
+          ...item.json,
           statusCode: response.status,
           headers: Object.fromEntries(response.headers.entries()),
           body: parsedBody,

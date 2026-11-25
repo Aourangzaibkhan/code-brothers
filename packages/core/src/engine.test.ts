@@ -347,7 +347,7 @@ describe('WorkflowEngine validation', () => {
             type: 'core.setData',
             parameters: {
               assignments: [
-                { name: 'orderId', value: '{{ $json.body.orderId }}' },
+                { name: 'orderId', value: '{{ $json.orderId }}' },
               ],
             },
           },

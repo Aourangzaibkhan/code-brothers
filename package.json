@@ -12,7 +12,9 @@
   "scripts": {
     "build": "tsc -b tsconfig.json && npm run build --workspace=@code-brothers/web",
     "test": "npm run test --workspaces --if-present",
-    "lint": "npm run lint --workspaces --if-present"
+    "lint": "npm run lint --workspaces --if-present",
+    "verify:templates": "node scripts/verify-templates.mjs",
+    "verify:templates:debug": "CB_VERIFY_DEBUG=1 node scripts/verify-templates.mjs"
   },
   "engines": {
     "node": ">=20"
