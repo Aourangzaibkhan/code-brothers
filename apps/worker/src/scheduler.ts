@@ -138,13 +138,19 @@ export class Scheduler {
     return fired;
   }
 
-  /** Start ticking on an interval (unref'd — never keeps a process alive). */
-  start(intervalMs = 30_000): void {
+  /**
+   * Start ticking on an interval. By default the timer is unref'd (it never
+   * keeps a process alive — right for library/test use). Pass keepAlive
+   * when the process exists to run the scheduler (the worker server):
+   * with every timer unref'd and the pg pool idle, the event loop empties
+   * and Node exits ~10s after boot, before any schedule fires.
+   */
+  start(intervalMs = 30_000, keepAlive = false): void {
     if (this.timer) return;
     this.timer = setInterval(() => {
       void this.tick();
     }, intervalMs);
-    this.timer.unref?.();
+    if (!keepAlive) this.timer.unref?.();
   }
 
   stop(): void {

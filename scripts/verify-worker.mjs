@@ -125,9 +125,18 @@ function spawnProc(cmd, args, extraEnv) {
     },
     stop: () =>
       new Promise((resolve) => {
+        // If the child already exited, 'exit' never fires again — resolve
+        // at once instead of hanging forever (this bit the worker script
+        // when the worker had died on its own before stop was called).
+        if (child.exitCode !== null || child.signalCode !== null) {
+          resolve();
+          return;
+        }
         child.once('exit', resolve);
         child.kill('SIGTERM');
         setTimeout(() => child.kill('SIGKILL'), 5000).unref();
+        // Safety net: never hang the whole script on a stubborn child.
+        setTimeout(resolve, 10000).unref();
       }),
   };
 }
@@ -214,6 +223,12 @@ async function main() {
       await new Promise((r) => setTimeout(r, 200));
     }
     check('worker boots and arms schedules', workerReady, workerProc.getOutput().slice(-500));
+    if (!workerReady) {
+      console.log(
+        `  worker output: ${workerProc.getOutput().slice(-500) || '(no output captured)'}\n` +
+          `  worker exit code: ${workerProc.child.exitCode ?? 'still running'}`,
+      );
+    }
     check(
       'worker armed exactly 1 schedule',
       /1 cron schedule\(s\) armed/.test(workerProc.getOutput()),

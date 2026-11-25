@@ -99,9 +99,18 @@ function spawnApi(masterKey, extraEnv) {
     },
     stop: () =>
       new Promise((resolve) => {
+        // If the child already exited, 'exit' never fires again — resolve
+        // at once instead of hanging forever (this bit the worker script
+        // when the worker had died on its own before stop was called).
+        if (child.exitCode !== null || child.signalCode !== null) {
+          resolve();
+          return;
+        }
         child.once('exit', resolve);
         child.kill('SIGTERM');
         setTimeout(() => child.kill('SIGKILL'), 5000).unref();
+        // Safety net: never hang the whole script on a stubborn child.
+        setTimeout(resolve, 10000).unref();
       }),
   };
 }

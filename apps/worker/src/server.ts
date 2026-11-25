@@ -153,9 +153,10 @@ async function refreshSchedules(): Promise<void> {
 const refreshTimer = setInterval(() => {
   void refreshSchedules();
 }, Number(process.env.CB_WORKER_REFRESH_MS ?? 5 * 60_000));
-refreshTimer.unref?.();
+// Deliberately NOT unref'd: the refresh timer is one of the handles that
+// keeps this process alive (see Scheduler.start's keepAlive note).
 
-scheduler.start(Number(process.env.CB_WORKER_TICK_MS ?? 30_000));
+scheduler.start(Number(process.env.CB_WORKER_TICK_MS ?? 30_000), true);
 console.info('worker: running (scheduler ticking, queue processing)');
 
 let shuttingDown = false;

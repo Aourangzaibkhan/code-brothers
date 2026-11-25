@@ -90,6 +90,23 @@ describe('Scheduler', () => {
     );
   });
 
+  it('start() with keepAlive keeps the process alive; without it the timer is unref’d', () => {
+    // Regression test for the worker exiting ~10s after boot: every timer
+    // was unref'd and the pg pool idles out, so the event loop emptied.
+    const timerOf = (s: Scheduler): NodeJS.Timeout | undefined =>
+      (s as unknown as { timer?: NodeJS.Timeout }).timer;
+
+    const unrefed = new Scheduler({ onFire: () => {} });
+    unrefed.start(60_000);
+    assert.equal(timerOf(unrefed)?.hasRef(), false);
+    unrefed.stop();
+
+    const kept = new Scheduler({ onFire: () => {} });
+    kept.start(60_000, true);
+    assert.equal(timerOf(kept)?.hasRef(), true);
+    kept.stop();
+  });
+
   it('drives the worker: a due cron enqueues a run that is executed and recorded', async () => {
     const executions = new InMemoryExecutionSink();
     const { worker } = startWorker({

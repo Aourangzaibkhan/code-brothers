@@ -64,13 +64,13 @@ export class Poller {
     return outcome;
   }
 
-  /** Start polling on an interval (unref'd). */
-  start(intervalMs: number = this.options.intervalMs ?? 60_000): void {
+  /** Start polling on an interval. Same keepAlive rule as Scheduler.start. */
+  start(intervalMs: number = this.options.intervalMs ?? 60_000, keepAlive = false): void {
     if (this.timer) return;
     this.timer = setInterval(() => {
       void this.tick();
     }, intervalMs);
-    this.timer.unref?.();
+    if (!keepAlive) this.timer.unref?.();
   }
 
   stop(): void {
