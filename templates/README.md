@@ -21,6 +21,10 @@ from the core registry and the connector packages.
 
 ## Before you import
 
+- All 10 templates run end to end against mock provider servers — see
+  `npm run verify:templates`. No template has ever called a live provider
+  account; connect your own credentials first (see
+  [`docs/connectors.md`](../docs/connectors.md#verification-status--read-this-first)).
 - Fill in workflow **variables** referenced as `{{ $vars.… }}` (owner phone,
   product links, location IDs) — they are declared under each template's
   `settings.variables` with empty placeholder values.

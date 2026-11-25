@@ -5,6 +5,39 @@ to get each free credential (spec Section 12) and where it goes: open the
 dashboard **Credentials Vault** and create a credential with the listed
 slot name — values are encrypted (AES-256-GCM) and never shown again.
 
+## Verification status — read this first
+
+**What was verified (automated, repeatable):** 420 Node tests + 14
+Python tests pass; all 10 templates in `templates/` run end to end
+against mock provider servers (WhatsApp Graph, Shopify Admin, Daraz,
+Instagram Graph, YouTube Data, ExperGo/TCS couriers, WooCommerce) plus a
+mock AI media worker — run `npm run verify:templates` to reproduce it.
+First-try fresh-clone build, Postgres persistence across restarts
+(`npm run verify:persistence`), the production dashboard proxy
+(`npm run verify:dashboard-proxy`), AI chat routing against a mock Ollama
+(`npm run verify-ai-chat`), and worker cron firing
+(`npm run verify:worker`) are all verified live on this machine.
+
+**What was NOT verified live:** no live WhatsApp, Shopify, Daraz,
+Instagram, YouTube or courier account was ever connected during
+development — no such credentials exist for testing — so no template has
+ever called a real provider endpoint. The connector code targets the real
+provider APIs (the mocks implement the same request/response shapes), but
+**you must connect your own accounts and keys before any template talks
+to a real provider**. The table below tells you how to get each one free.
+
+**AI providers:** the router, key rotation, fallback and cooldown logic
+are tested, and chat routing is verified against a mock Ollama server —
+but no live Gemini/Groq/OpenRouter call was ever made. Bring your own
+free-tier keys (below) or a local Ollama install. With no provider
+configured the Copilot answers 503 and the dashboard falls back to its
+built-in workflow generator, labelled as such.
+
+**If you bought this as an Agensi skill:** Agensi's own tools cover
+Amazon/Shopify/eBay/Walmart product data; WhatsApp coverage is NOT
+confirmed by Agensi, and no promises exist on additions. Live
+WhatsApp/Shopify store connections remain a buyer requirement either way.
+
 ## AI providers (the built-in AI Assistant)
 
 | Provider | How to get it free | Slot / where |

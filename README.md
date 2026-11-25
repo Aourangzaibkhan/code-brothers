@@ -31,6 +31,20 @@ build works — TypeScript project references build workspaces in
 dependency order), then `npm start --workspace=@code-brothers/api` and
 `npm run dev --workspace=@code-brothers/web`.
 
+## Verification status
+
+Verified live, repeatable with the `npm run verify:*` scripts: 420 Node
+tests + 14 Python tests; all 10 templates run end to end against mock
+providers; Postgres persistence across restarts; production dashboard
+proxy; AI chat routing (mock Ollama) with an honest 503 when no provider
+is configured; worker cron firing into the API's execution history.
+**Not verified live:** no real WhatsApp/Shopify/Daraz/Instagram/YouTube
+account was ever connected — connectors were tested against mocks only,
+and live AI providers were never called. Buyers must connect their own
+accounts and free-tier keys; see
+[docs/connectors.md](docs/connectors.md#verification-status--read-this-first)
+for exactly what is and isn't proven.
+
 ## Templates
 10 ready-to-import workflows live in [`templates/`](templates/README.md) — validate them with `node templates/validate.mjs`.
 
