@@ -11,6 +11,7 @@
   ],
   "scripts": {
     "build": "tsc -b tsconfig.json && npm run build --workspace=@code-brothers/web",
+    "clean": "tsc -b --clean tsconfig.json",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "verify:templates": "node scripts/verify-templates.mjs",

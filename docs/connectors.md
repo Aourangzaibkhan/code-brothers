@@ -7,8 +7,9 @@ slot name — values are encrypted (AES-256-GCM) and never shown again.
 
 ## Verification status — read this first
 
-**What was verified (automated, repeatable):** 420 Node tests + 14
-Python tests pass; all 10 templates in `templates/` run end to end
+**What was verified (automated, repeatable):** 404 Node tests (400
+node:test + 4 web vitest) + 14 Python tests pass; all 10 templates in
+`templates/` run end to end
 against mock provider servers (WhatsApp Graph, Shopify Admin, Daraz,
 Instagram Graph, YouTube Data, ExperGo/TCS couriers, WooCommerce) plus a
 mock AI media worker — run `npm run verify:templates` to reproduce it.

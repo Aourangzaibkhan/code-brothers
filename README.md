@@ -33,8 +33,9 @@ dependency order), then `npm start --workspace=@code-brothers/api` and
 
 ## Verification status
 
-Verified live, repeatable with the `npm run verify:*` scripts: 420 Node
-tests + 14 Python tests; all 10 templates run end to end against mock
+Verified live, repeatable with the `npm run verify:*` scripts: 404 Node
+tests (400 node:test + 4 web vitest) and 14 Python tests; all 10 templates
+run end to end against mock
 providers; Postgres persistence across restarts; production dashboard
 proxy; AI chat routing (mock Ollama) with an honest 503 when no provider
 is configured; worker cron firing into the API's execution history.
@@ -43,7 +44,10 @@ account was ever connected — connectors were tested against mocks only,
 and live AI providers were never called. Buyers must connect their own
 accounts and free-tier keys; see
 [docs/connectors.md](docs/connectors.md#verification-status--read-this-first)
-for exactly what is and isn't proven.
+for exactly what is and isn't proven. (On a long-lived checkout, run
+`npm run clean` before trusting a test count — `tsc -b` never deletes
+outputs for deleted sources, so a stale `dist/*.test.js` can be picked up
+by the test glob and inflate the count.)
 
 ## Templates
 10 ready-to-import workflows live in [`templates/`](templates/README.md) — validate them with `node templates/validate.mjs`.
