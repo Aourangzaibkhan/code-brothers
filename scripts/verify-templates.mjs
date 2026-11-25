@@ -489,11 +489,12 @@ async function main() {
     const tokenMatch = out.match(/setup token:\s*([A-Za-z0-9_-]+)/i);
     if (!tokenMatch) throw new Error('setup token not found in API output:\n' + out.slice(-2000));
     const setupToken = tokenMatch[1];
+    const testPassword = randomBytes(16).toString('hex');
 
     const claim = await api('POST', '/api/setup/claim', undefined, {
       setupToken,
       email: 'owner@example.com',
-      password: 'Correct-Horse-Battery-Staple-1',
+      password: testPassword,
       displayName: 'Owner',
     });
     if (claim.status !== 201 && claim.status !== 200) {
