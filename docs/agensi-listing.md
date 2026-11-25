@@ -8,7 +8,7 @@ Dashboard. Nothing here has been submitted. The ZIP is built with
 
 - **Skill name:** code-brothers
 - **Title (listing headline):** Code Brothers — Business Automation Platform for WhatsApp, Shopify, Daraz & Social
-- **Price:** **$9 one-time** (seller keeps $6.30 after Agensi's 30%).
+- **Price:** **$13 one-time** (seller keeps $9.10 after Agensi's 30%).
   One-time, not a subscription. Price can be changed later; the change
   never applies to past purchases. The listing can be removed at any time;
   earnings already made are still paid out.
@@ -77,7 +77,7 @@ item each; "Needs access to" is only for well-known services.
 ## Agensi tools to attach (up to 10, at submit time or later)
 
 Agensi tools need **no buyer API keys** — uses are charged per use from
-the buyer's Agensi balance, separate from the $9 skill price. Attach
+the buyer's Agensi balance, separate from the $13 skill price. Attach
 tools in these categories in the submit form (pick the exact tools in the
 form — tool availability is decided there, not in this file):
 
@@ -120,12 +120,15 @@ always need the buyer's own accounts (see Requires).
 1. Agensi account + **Creator Mode** on (Dashboard → Settings).
 2. **Payouts**: Zoneless (USDC on Solana) — Stripe does not cover
    Pakistan. KYC with Zoneless is required before a paid skill can go
-   live. Seller already has a Binance account: use a **Solana-network
-   USDC deposit address** in Binance, and convert USDC → PKR via P2P.
-   Never send USDC to a wrong-network address. USDC becomes payable 14
+   live. **Use the payout wallet created on the Zoneless site itself
+   during onboarding** (per Joeri, 25 Nov 22:09 PKT) — whether a
+   Binance/exchange address works as the payout destination is NOT
+   confirmed. After USDC arrives in that wallet, it can be sent to
+   Binance and converted USDC → PKR via P2P. Never send USDC to a
+   wrong-network address. USDC becomes payable 14
    days after each sale; $3.50 minimum payout.
 3. Upload `code-brothers-skill-v1.0.0.zip` in Creator Dashboard →
-   Submit a Skill; set price **$9 one-time**; add tags; paste the
+   Submit a Skill; set price **$13 one-time**; add tags; paste the
    description above; fill the Requires list; attach the Agensi tools.
 4. Security review (8-point automated scan + AI/human review, usually
    24–48 hours). If the scan flags anything, fix it in `skill/` and
