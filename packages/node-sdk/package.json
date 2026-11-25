@@ -14,7 +14,7 @@
   "name": "@code-brothers/node-sdk",
   "private": true,
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -b tsconfig.json",
     "test": "npm run build && node --test \"dist/**/*.test.js\""
   },
   "type": "module",

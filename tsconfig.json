@@ -1,0 +1,56 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/node-sdk"
+    },
+    {
+      "path": "packages/security"
+    },
+    {
+      "path": "packages/database"
+    },
+    {
+      "path": "packages/rag-engine"
+    },
+    {
+      "path": "packages/mcp-bridge"
+    },
+    {
+      "path": "packages/core"
+    },
+    {
+      "path": "packages/ai-engine"
+    },
+    {
+      "path": "packages/connectors/core-nodes"
+    },
+    {
+      "path": "packages/connectors/couriers"
+    },
+    {
+      "path": "packages/connectors/daraz"
+    },
+    {
+      "path": "packages/connectors/ecommerce-local"
+    },
+    {
+      "path": "packages/connectors/instagram"
+    },
+    {
+      "path": "packages/connectors/shopify"
+    },
+    {
+      "path": "packages/connectors/whatsapp"
+    },
+    {
+      "path": "packages/connectors/youtube"
+    },
+    {
+      "path": "apps/api"
+    },
+    {
+      "path": "apps/worker"
+    }
+  ]
+}

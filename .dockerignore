@@ -1,0 +1,20 @@
+# Keep the Docker build context small and hermetic: never copy a
+# developer machine's node_modules, build output, git history or local
+# environment into an image (the build stage runs `npm ci` itself).
+node_modules/
+dist/
+.git/
+.env
+.env.*
+!.env.example
+*.log
+uploads/
+whatsapp-sessions/
+.auth/
+.DS_Store
+__pycache__/
+*.pyc
+coverage/
+.turbo/
+.venv/
+venv/

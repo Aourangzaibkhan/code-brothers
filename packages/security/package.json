@@ -10,7 +10,7 @@
   "name": "@code-brothers/security",
   "private": true,
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -b tsconfig.json",
     "test": "npm run build && node --test \"dist/**/*.test.js\""
   },
   "type": "module",
@@ -21,6 +21,6 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
-    "typescript": "^7.0.2"
+    "typescript": "^5.7.0"
   }
 }

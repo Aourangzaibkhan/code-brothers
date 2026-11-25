@@ -4,12 +4,20 @@
   "private": true,
   "description": "Free, open-source visual automation + AI assistant platform",
   "license": "MIT",
-  "workspaces": ["apps/*", "packages/*", "packages/connectors/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "packages/connectors/*"
+  ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "tsc -b tsconfig.json && npm run build --workspace=@code-brothers/web",
     "test": "npm run test --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present"
   },
-  "engines": { "node": ">=20" },
-  "devDependencies": { "typescript": "^5.6.0" }
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
 }

@@ -16,9 +16,20 @@ A self-hosted n8n/Zapier alternative with a built-in free AI assistant and enter
 ```bash
 git clone https://github.com/AourangZaibKhan/code-brothers.git
 cd code-brothers
-cp .env.example .env   # set CB_MASTER_KEY and passwords
-docker compose -f docker/docker-compose.lite.yml up -d
+cp .env.example .env
+# Fill in real secrets (the example values are placeholders — the API
+# refuses to boot on a weak/missing CB_MASTER_KEY):
+node -e "const c=require('crypto'),fs=require('fs');let e=fs.readFileSync('.env','utf8');e=e.replace(/^CB_MASTER_KEY=.*$/m,'CB_MASTER_KEY='+c.randomBytes(32).toString('hex'));e=e.replace(/^POSTGRES_PASSWORD=.*$/m,'POSTGRES_PASSWORD='+c.randomBytes(16).toString('hex'));e=e.replace(/^REDIS_PASSWORD=.*$/m,'REDIS_PASSWORD='+c.randomBytes(16).toString('hex'));fs.writeFileSync('.env',e);console.log('secrets written to .env')"
+docker compose -f docker/docker-compose.lite.yml up -d --wait
+curl http://localhost:3000/api/setup/status
+# {"setupRequired":true,"setupClosed":false} — claim the owner account
+# (the one-time setup token is printed in the api container logs).
 ```
+
+Local development without Docker: `npm ci && npm run build` (first-try
+build works — TypeScript project references build workspaces in
+dependency order), then `npm start --workspace=@code-brothers/api` and
+`npm run dev --workspace=@code-brothers/web`.
 
 ## Templates
 10 ready-to-import workflows live in [`templates/`](templates/README.md) — validate them with `node templates/validate.mjs`.

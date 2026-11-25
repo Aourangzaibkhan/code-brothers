@@ -1,1 +1,30 @@
-{"dependencies":{"@code-brothers/node-sdk":"file:../../node-sdk","pdfkit":"^0.21.0","pg":"^8.23.1"},"devDependencies":{"@types/node":"^22.10.0","@types/pdfkit":"^0.17.7","@types/pg":"^8.23.1","typescript":"^5.7.0"},"exports":{".":{"default":"./dist/index.js","types":"./dist/index.d.ts"}},"license":"MIT","main":"dist/index.js","name":"@code-brothers/connector-ecommerce-local","private":true,"scripts":{"build":"tsc -p tsconfig.json","test":"npm run build && node --test \"dist/**/*.test.js\""},"type":"module","types":"dist/index.d.ts","version":"0.1.0"}
+{
+  "dependencies": {
+    "@code-brothers/node-sdk": "file:../../node-sdk",
+    "pdfkit": "^0.21.0",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/pdfkit": "^0.17.7",
+    "@types/pg": "^8.23.1",
+    "typescript": "^5.7.0"
+  },
+  "exports": {
+    ".": {
+      "default": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "license": "MIT",
+  "main": "dist/index.js",
+  "name": "@code-brothers/connector-ecommerce-local",
+  "private": true,
+  "scripts": {
+    "build": "tsc -b tsconfig.json",
+    "test": "npm run build && node --test \"dist/**/*.test.js\""
+  },
+  "type": "module",
+  "types": "dist/index.d.ts",
+  "version": "0.1.0"
+}
