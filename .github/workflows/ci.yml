@@ -1,5 +1,9 @@
 name: CI
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  # Manual re-trigger (e.g. when a push event is lost during a GitHub outage).
+  workflow_dispatch:
 jobs:
   build:
     runs-on: ubuntu-latest
