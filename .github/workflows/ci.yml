@@ -6,7 +6,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm }
+        # Node 22+: `node --test "dist/**/*.test.js"` glob patterns only work
+        # from Node 22 — on Node 20 every workspace failed with "Could not find".
+        with: { node-version: 22, cache: npm }
       # Strict install: fails when package-lock.json is out of sync.
       - run: npm ci
       # First-try build (TypeScript project references build workspaces in
