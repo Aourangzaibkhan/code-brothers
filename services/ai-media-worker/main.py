@@ -46,7 +46,13 @@ import wave
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Request
+# NOTE: UploadFile must come from starlette.datastructures, NOT fastapi.
+# request.form() returns starlette UploadFile instances; FastAPI >= 0.115
+# defines its own fastapi.datastructures.UploadFile, a DIFFERENT class —
+# isinstance() against the fastapi one is always False, so every multipart
+# upload used to fail with 422 "file upload is required".
+from starlette.datastructures import UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 

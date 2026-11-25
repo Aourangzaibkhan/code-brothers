@@ -7,11 +7,30 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
-      - run: npm ci || npm install
-      - run: npm run lint --workspaces --if-present || true
-      - run: npm run test --workspaces --if-present || true
+      # Strict install: fails when package-lock.json is out of sync.
+      - run: npm ci
+      # First-try build (TypeScript project references build workspaces in
+      # dependency order — a fresh clone must pass here).
+      - run: npm run build
+      # No `|| true` anywhere below: a failing step fails the job.
+      # Lint is the web typecheck (tsc --noEmit); every other workspace
+      # typechecks as part of its build/test.
+      - run: npm run lint --workspaces --if-present
+      - run: npm run test --workspaces --if-present
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      # AI media worker tests (FastAPI service; model extras NOT installed —
+      # missing-model endpoints answer 503 and the tests assert exactly that).
+      - run: pip install -r services/ai-media-worker/requirements.txt -r services/ai-media-worker/requirements-dev.txt
+      - run: python -m pytest services/ai-media-worker/test_main.py -q
+      # The compose file must render, and every shipped image must BUILD
+      # (this is what caught the old "single npm build" failure — the
+      # Dockerfile runs the same first-try build as a fresh clone).
       - run: docker compose -f docker/docker-compose.lite.yml config
         env:
-          POSTGRES_PASSWORD: <redacted>
-          REDIS_PASSWORD: <redacted>
+          POSTGRES_PASSWORD: ci-dummy-postgres-password
+          REDIS_PASSWORD: ci-dummy-redis-password
           CB_MASTER_KEY: ci-dummy-master-key-not-a-real-secret
+      - run: docker build -f docker/Dockerfile.api -t code-brothers-api .
+      - run: docker build -f docker/Dockerfile.web -t code-brothers-web .
+      - run: docker build -f docker/Dockerfile.worker -t code-brothers-worker .
