@@ -6,6 +6,8 @@
 # instead of the HTTP API. No port is exposed — the worker talks to
 # Postgres only, and scheduled runs appear in the API's execution history.
 FROM node:20-alpine AS build
+# argon2 ships a native binding: node-gyp needs Python + a C++ toolchain.
+RUN apk add --no-cache python3 make g++
 WORKDIR /app
 COPY . .
 RUN npm ci && npm run build

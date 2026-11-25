@@ -6,6 +6,8 @@
 # the React app lands, its production build output is expected in
 # apps/web/dist — the COPY below already targets that directory.
 FROM node:20-alpine AS build
+# argon2 ships a native binding: node-gyp needs Python + a C++ toolchain.
+RUN apk add --no-cache python3 make g++
 WORKDIR /app
 COPY . .
 RUN npm ci && npm run build --workspace=@code-brothers/web
