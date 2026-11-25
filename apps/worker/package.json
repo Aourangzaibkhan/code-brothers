@@ -2,6 +2,7 @@
   "dependencies": {
     "@code-brothers/connector-registry": "file:../../packages/connector-registry",
     "@code-brothers/core": "file:../../packages/core",
+    "@code-brothers/database": "file:../../packages/database",
     "@code-brothers/security": "file:../../packages/security"
   },
   "devDependencies": {
@@ -20,6 +21,7 @@
   "private": true,
   "scripts": {
     "build": "tsc -b tsconfig.json",
+    "start": "node dist/server.js",
     "test": "npm run build && node --test \"dist/**/*.test.js\""
   },
   "type": "module",

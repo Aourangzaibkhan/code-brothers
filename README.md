@@ -39,6 +39,8 @@ dependency order), then `npm start --workspace=@code-brothers/api` and
 - [Connectors & free credentials](docs/connectors.md)
 - [Hardening guide](docs/hardening-guide.md)
 
+The workflow worker (`apps/worker`, `worker` service in both compose files) runs scheduled triggers: it loads active workflows from Postgres, arms their `core.cronTrigger` schedules (re-scanning every 5 minutes for workflows created or activated after boot), executes due runs with vault-backed credentials per owner, and records them in the same execution history the API serves. It needs the same `DATABASE_URL` and `CB_MASTER_KEY` as the API, and refuses to start without them. Verify it with `npm run verify:worker`.
+
 The optional Python AI media worker (Whisper/TTS/OCR/FFmpeg) lives in `services/ai-media-worker` and is part of the `docker-compose.full.yml` profile.
 
 ## License

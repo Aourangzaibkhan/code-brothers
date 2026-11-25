@@ -17,7 +17,8 @@
     "verify:templates:debug": "CB_VERIFY_DEBUG=1 node scripts/verify-templates.mjs",
     "verify:persistence": "node scripts/verify-persistence.mjs",
     "verify:dashboard-proxy": "node scripts/verify-dashboard-proxy.mjs",
-    "verify:ai-chat": "node scripts/verify-ai-chat.mjs"
+    "verify:ai-chat": "node scripts/verify-ai-chat.mjs",
+    "verify:worker": "node scripts/verify-worker.mjs"
   },
   "engines": {
     "node": ">=20"

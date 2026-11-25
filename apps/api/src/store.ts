@@ -201,16 +201,28 @@ export interface NonceCache {
   checkAndAdd(key: string, ttlMs: number): Promise<boolean>;
 }
 
-/** Process-wide kill-switch state (spec §8: "Freeze Platform"). */
-export class PlatformState {
+/**
+ * Process-wide kill-switch state (spec §8: "Freeze Platform").
+ * Async because the durable implementation reads/writes Postgres; the
+ * in-memory implementation below keeps the same contract for tests and
+ * for runs without a database.
+ */
+export interface PlatformState {
+  halt(): Promise<void>;
+  resume(): Promise<void>;
+  isHalted(): Promise<boolean>;
+}
+
+/** In-memory PlatformState (tests + DATABASE_URL-less runs). */
+export class MemoryPlatformState implements PlatformState {
   private haltedFlag = false;
-  halt(): void {
+  async halt(): Promise<void> {
     this.haltedFlag = true;
   }
-  resume(): void {
+  async resume(): Promise<void> {
     this.haltedFlag = false;
   }
-  isHalted(): boolean {
+  async isHalted(): Promise<boolean> {
     return this.haltedFlag;
   }
 }
@@ -489,6 +501,6 @@ export function createMemoryStores(): Stores {
     webhooks: new MemoryWebhooksRepository(),
     audit: new MemoryAuditLog(),
     nonces: new MemoryNonceCache(),
-    platform: new PlatformState(),
+    platform: new MemoryPlatformState(),
   };
 }

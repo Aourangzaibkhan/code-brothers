@@ -2,6 +2,7 @@ export {
   type TriggerType,
   type WorkflowRunJobData,
   type StoredExecution,
+  type LoadedWorkflow,
   type WorkflowProvider,
   type ExecutionSink,
   MapWorkflowProvider,
@@ -28,3 +29,10 @@ export {
   type PollOutcome,
   type PollerOptions,
 } from './poller.js';
+export {
+  PgWorkflowProvider,
+  PgExecutionSink,
+  PgPollingStateStore,
+  PgPlatformHalt,
+  createPgCredentialsProvider,
+} from './pg-adapters.js';

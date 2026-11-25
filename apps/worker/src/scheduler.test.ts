@@ -59,6 +59,37 @@ describe('Scheduler', () => {
     assert.equal(fired[1].scheduledFor.toISOString(), '2026-11-20T10:02:00.000Z');
   });
 
+  it('registerIfMissing never resets an already-armed next run', async () => {
+    const scheduler = new Scheduler({ onFire: () => {} });
+    const from = new Date('2026-11-20T10:00:30.000Z');
+    assert.equal(scheduler.register(CRON_WORKFLOW, from), 1);
+    assert.equal(scheduler.list()[0].nextRun.toISOString(), '2026-11-20T10:01:00.000Z');
+
+    // A refresh later must not touch the armed entry…
+    assert.equal(scheduler.registerIfMissing(CRON_WORKFLOW, new Date('2026-11-20T10:00:50.000Z')), 0);
+    assert.equal(scheduler.list()[0].nextRun.toISOString(), '2026-11-20T10:01:00.000Z');
+
+    // …but a workflow with a second, unarmed cron node gets only that one armed.
+    const twoCron: WorkflowDefinition = {
+      ...CRON_WORKFLOW,
+      nodes: [
+        ...CRON_WORKFLOW.nodes,
+        {
+          id: 'cron2',
+          type: 'core.cronTrigger',
+          name: 'Cron 2',
+          parameters: { expression: '*/5 * * * *' },
+        },
+      ],
+    };
+    assert.equal(scheduler.registerIfMissing(twoCron, from), 1);
+    assert.equal(scheduler.list().length, 2);
+    assert.equal(
+      scheduler.list().find((e) => e.nodeId === 'cron')?.nextRun.toISOString(),
+      '2026-11-20T10:01:00.000Z',
+    );
+  });
+
   it('drives the worker: a due cron enqueues a run that is executed and recorded', async () => {
     const executions = new InMemoryExecutionSink();
     const { worker } = startWorker({

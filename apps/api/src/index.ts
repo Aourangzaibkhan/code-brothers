@@ -2,6 +2,7 @@ export { buildApp, type ApiOptions, type BuiltApi } from './app.js';
 export {
   createMemoryStores,
   PlatformState,
+  MemoryPlatformState,
   MemoryUsersRepository,
   MemorySessionsRepository,
   MemoryCredentialsRepository,

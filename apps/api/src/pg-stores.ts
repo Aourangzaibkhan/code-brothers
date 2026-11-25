@@ -890,6 +890,39 @@ class PgNonceCache implements NonceCache {
 // Factory + migration helper
 // ---------------------------------------------------------------------------
 
+/** Pg-backed kill switch (spec §8): the single platform_state row, shared
+ * with the worker process so a freeze is visible everywhere. */
+class PgPlatformState implements PlatformState {
+  constructor(private readonly pool: Pool) {}
+
+  async halt(): Promise<void> {
+    await this.pool.query(
+      `UPDATE platform_state
+          SET halted = true, halted_at = now(), updated_at = now()
+        WHERE id = 'platform'`,
+    );
+  }
+
+  async resume(): Promise<void> {
+    await this.pool.query(
+      `UPDATE platform_state
+          SET halted = false, halted_at = NULL, updated_at = now()
+        WHERE id = 'platform'`,
+    );
+  }
+
+  async isHalted(): Promise<boolean> {
+    const { rows } = await this.pool.query(
+      "SELECT halted FROM platform_state WHERE id = 'platform'",
+    );
+    return Boolean(rows[0]?.['halted']);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Factory + migration helper
+// ---------------------------------------------------------------------------
+
 /** Build a full set of Pg-backed stores sharing one pool. */
 export function createPgStores(pool: Pool): Stores {
   return {
@@ -901,7 +934,7 @@ export function createPgStores(pool: Pool): Stores {
     webhooks: new PgWebhooksRepository(pool),
     audit: new PgAuditLog(pool),
     nonces: new PgNonceCache(pool),
-    platform: new PlatformState(),
+    platform: new PgPlatformState(pool),
   };
 }
 

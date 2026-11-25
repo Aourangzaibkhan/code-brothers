@@ -69,6 +69,31 @@ export class Scheduler {
     return armed;
   }
 
+  /**
+   * Arm only the cronTrigger nodes of a workflow that are NOT already
+   * armed. Unlike register(), already-armed entries keep their nextRun —
+   * the worker's periodic refresh uses this so re-scanning never delays
+   * a schedule that is already waiting for its slot.
+   */
+  registerIfMissing(workflow: WorkflowDefinition, from: Date = this.now()): number {
+    let armed = 0;
+    for (const node of workflow.nodes) {
+      if (node.type !== 'core.cronTrigger' || node.disabled) continue;
+      const key = `${workflow.id}:${node.id}`;
+      if (this.entries.has(key)) continue;
+      const expression = node.parameters?.expression;
+      if (typeof expression !== 'string' || expression.trim() === '') continue;
+      this.entries.set(key, {
+        workflow,
+        node,
+        expression,
+        nextRun: nextCronRun(expression, from),
+      });
+      armed++;
+    }
+    return armed;
+  }
+
   /** Disarm all schedules of a workflow. Returns how many were removed. */
   unregister(workflowId: string): number {
     let removed = 0;

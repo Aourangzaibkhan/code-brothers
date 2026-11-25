@@ -861,7 +861,7 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
     async (req, reply) => {
       const workflow = await findOwnedWorkflow(req, req.params.id);
       if (!workflow) return reply.code(404).send({ error: 'workflow_not_found' });
-      if (stores.platform.isHalted()) {
+      if (await stores.platform.isHalted()) {
         return reply.code(503).send({ error: 'platform_halted' });
       }
       const body = (req.body ?? {}) as { triggerData?: unknown; variables?: Record<string, unknown> };
@@ -1008,7 +1008,7 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
       score,
       maxScore: 100,
       factors,
-      halted: stores.platform.isHalted(),
+      halted: await stores.platform.isHalted(),
       computedAt: new Date(now()).toISOString(),
     };
   });
@@ -1017,7 +1017,7 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
     '/api/security/kill-switch',
     { preHandler: [requireAuth, requireOwner] },
     async (req) => {
-      stores.platform.halt();
+      await stores.platform.halt();
       await audit(req, {
         userId: (req.authUser as UserRecord).id,
         eventType: 'kill_switch',
@@ -1029,7 +1029,7 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
   );
 
   app.post('/api/security/resume', { preHandler: [requireAuth, requireOwner] }, async (req) => {
-    stores.platform.resume();
+    await stores.platform.resume();
     await audit(req, {
       userId: (req.authUser as UserRecord).id,
       eventType: 'kill_switch_resume',
@@ -1081,7 +1081,7 @@ export async function buildApp(options: ApiOptions = {}): Promise<BuiltApi> {
       const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
       const hook = await stores.webhooks.findBySlug(req.params.slug);
       if (!hook || !hook.isActive) return reply.code(404).send({ error: 'webhook_not_found' });
-      if (stores.platform.isHalted()) {
+      if (await stores.platform.isHalted()) {
         return reply.code(503).send({ error: 'platform_halted' });
       }
       if (hook.ipAllowlist.length > 0 && !hook.ipAllowlist.some((rule) => ipMatches(req.ip, rule))) {

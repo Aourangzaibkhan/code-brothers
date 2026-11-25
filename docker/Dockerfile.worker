@@ -1,0 +1,20 @@
+# Code Brothers Worker — multi-stage build, non-root runtime.
+# Build context: repository root.
+#   docker build -f docker/Dockerfile.worker -t code-brothers-worker .
+# Same build as Dockerfile.api; only the entrypoint differs: the worker
+# runs apps/worker/dist/server.js (Scheduler + queue + Pg execution sink)
+# instead of the HTTP API. No port is exposed — the worker talks to
+# Postgres only, and scheduled runs appear in the API's execution history.
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY . .
+RUN npm ci && npm run build
+
+FROM node:20-alpine AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=build /app ./
+RUN npm prune --omit=dev && npm cache clean --force
+# The node:20-alpine image ships an unprivileged "node" user — never run as root.
+USER node
+CMD ["node", "apps/worker/dist/server.js"]
