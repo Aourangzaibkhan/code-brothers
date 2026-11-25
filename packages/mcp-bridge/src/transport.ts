@@ -88,3 +88,49 @@ export function createInMemoryTransportPair(): [McpTransport, McpTransport] {
   b.peer = a;
   return [a, b];
 }
+
+/* ------------------------------------------------------------------ */
+/* Stdio server transport (this process IS the server)                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A transport for an MCP server that runs as a child process: reads
+ * newline-delimited JSON-RPC from stdin and writes responses to stdout.
+ *
+ * stdout is the protocol channel — never write diagnostics there; use
+ * stderr. Mirrors the client-side {@link StdioTransport} in stdio.ts.
+ */
+export function createStdioServerTransport(): McpTransport {
+  let handler: MessageHandler | undefined;
+  let buffer = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (chunk: string) => {
+    buffer += chunk;
+    let idx: number;
+    while ((idx = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, idx).trim();
+      buffer = buffer.slice(idx + 1);
+      if (!line) continue;
+      try {
+        handler?.(JSON.parse(line) as JsonRpcMessage);
+      } catch {
+        /* ignore non-JSON noise on stdin */
+      }
+    }
+  });
+  return {
+    async send(msg: JsonRpcRequest | JsonRpcNotification): Promise<void> {
+      await new Promise<void>((resolve, reject) => {
+        process.stdout.write(`${JSON.stringify(msg)}\n`, (err) =>
+          err ? reject(err) : resolve(),
+        );
+      });
+    },
+    onMessage(h: MessageHandler): void {
+      handler = h;
+    },
+    async close(): Promise<void> {
+      process.stdin.destroy();
+    },
+  };
+}

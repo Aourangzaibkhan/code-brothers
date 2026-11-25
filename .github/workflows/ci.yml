@@ -23,6 +23,10 @@ jobs:
       # typechecks as part of its build/test.
       - run: npm run lint --workspaces --if-present
       - run: npm run test --workspaces --if-present
+      # The Agensi skill package: builds the submission ZIP from the repo
+      # sources, validates its structure + secret scan, and re-validates
+      # the unzipped artifact (templates must match the repo byte-for-byte).
+      - run: npm run verify:skill
       - uses: actions/setup-python@v5
         with: { python-version: '3.12' }
       # AI media worker tests (FastAPI service; model extras NOT installed —

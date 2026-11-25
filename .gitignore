@@ -17,3 +17,7 @@ coverage/
 venv/
 dist/
 *.tsbuildinfo
+
+# Agensi skill packaging (generated, never commit)
+skill/.package/
+code-brothers-skill-v*.zip

@@ -53,6 +53,9 @@
       "path": "apps/worker"
     },
     {
+      "path": "apps/mcp-server"
+    },
+    {
       "path": "packages/connector-registry"
     }
   ]

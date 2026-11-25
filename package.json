@@ -19,7 +19,9 @@
     "verify:persistence": "node scripts/verify-persistence.mjs",
     "verify:dashboard-proxy": "node scripts/verify-dashboard-proxy.mjs",
     "verify:ai-chat": "node scripts/verify-ai-chat.mjs",
-    "verify:worker": "node scripts/verify-worker.mjs"
+    "verify:worker": "node scripts/verify-worker.mjs",
+    "verify:mcp-server": "node scripts/verify-mcp-server.mjs",
+    "verify:skill": "bash skill/package-skill.sh && rm -rf /tmp/cb-skill-check && mkdir -p /tmp/cb-skill-check && unzip -q -o code-brothers-skill-v*.zip -d /tmp/cb-skill-check && node skill/validate-skill.mjs /tmp/cb-skill-check"
   },
   "engines": {
     "node": ">=20"
