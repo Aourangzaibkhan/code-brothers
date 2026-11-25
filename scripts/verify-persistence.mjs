@@ -28,7 +28,9 @@ const DATABASE_URL =
 const PORT = 3002;
 const API = `http://127.0.0.1:${PORT}`;
 const MASTER_KEY = randomBytes(32).toString('hex');
-const PASSWORD = 'Correct-Horse-Battery-Staple-2';
+// Never hardcode a password literal, even a dummy one — gitleaks flags it
+// and the Security check goes red. Generated fresh on every run.
+const PASSWORD = randomBytes(16).toString('hex');
 
 const failures = [];
 function check(name, ok, detail = '') {

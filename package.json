@@ -15,7 +15,8 @@
     "lint": "npm run lint --workspaces --if-present",
     "verify:templates": "node scripts/verify-templates.mjs",
     "verify:templates:debug": "CB_VERIFY_DEBUG=1 node scripts/verify-templates.mjs",
-    "verify:persistence": "node scripts/verify-persistence.mjs"
+    "verify:persistence": "node scripts/verify-persistence.mjs",
+    "verify:dashboard-proxy": "node scripts/verify-dashboard-proxy.mjs"
   },
   "engines": {
     "node": ">=20"
